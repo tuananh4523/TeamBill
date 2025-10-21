@@ -32,10 +32,8 @@ export default function Topbar() {
 
   return (
     <>
-      <div className="flex items-center justify-between w-full h-[60px] bg-white/90 backdrop-blur-sm border-b border-gray-200 px-5 shadow-sm">
-        {/* Logo + breadcrumb */}
+      <div className="flex items-center justify-between w-full h-[60px] bg-white/90 backdrop-blur-sm border-b border-gray-200 px-5 shadow-sm rounded-md">
         <div className="flex items-center gap-3">
-         
           <Breadcrumb />
         </div>
 

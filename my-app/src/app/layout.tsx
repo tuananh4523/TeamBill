@@ -47,7 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {/* ===== TOPBAR ===== */}
                 <header
                   className={clsx(
-                    "sticky top-0 z-30 flex items-center justify-between h-[64px] bg-[#DFF2FD] pl-6",
+                    "sticky top-0 z-30 flex items-center justify-between h-[64px] bg-[#DFF2FD] p-6",
                   )}
                 >
                   <Topbar />
