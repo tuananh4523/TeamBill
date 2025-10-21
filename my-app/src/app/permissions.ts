@@ -1,0 +1,6 @@
+// permissions.ts
+export enum EXPENSE_PERMISSION {
+  XEM_DS_CHI_TIEU = "XEM_DS_CHI_TIEU",
+  THEM_CHI_TIEU = "THEM_CHI_TIEU",
+  THANH_TOAN = "THANH_TOAN",
+}
