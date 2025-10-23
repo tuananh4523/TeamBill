@@ -1,53 +1,53 @@
+// controllers/userController.js
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import { userSchema } from "../schema/userSchema.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "teamBill_secret"; // ⚙️ Khóa bí mật JWT, nên lưu trong .env
+const JWT_SECRET = process.env.JWT_SECRET || "teamBill_secret";
 
 // ===================== ĐĂNG KÝ =====================
 export const signup = async (req, res) => {
   try {
-    const { username, password, email, age } = req.body;
-
-    // ✅ Validate dữ liệu đầu vào
     const { error } = userSchema.validate(req.body, { abortEarly: false });
     if (error)
-      return res.status(400).json({ message: error.details.map(m => m.message) });
+      return res.status(400).json({ message: error.details.map((m) => m.message) });
 
-    // ✅ Kiểm tra email đã tồn tại chưa
-    const existUser = await User.findOne({ email });
+    const { username, password, email, fullName, phone, gender } = req.body;
+    const existUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existUser)
-      return res.status(400).json({ message: "Email đã tồn tại" });
+      return res.status(400).json({ message: "Email hoặc tên đăng nhập đã tồn tại" });
 
-    // ✅ Mã hóa mật khẩu
     const hashedPassword = await bcryptjs.hash(password, 10);
 
-    // ✅ Tạo người dùng
     const newUser = await User.create({
       username,
-      email,
       password: hashedPassword,
-      age,
+      email,
+      fullName,
+      phone,
+      gender,
+      isVerified: false,
+      isActive: true,
+      joinedAt: new Date(),
     });
 
-    // ✅ Sinh token JWT
     const token = jwt.sign({ userId: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
 
-    // ✅ Phản hồi về client
-    return res.status(201).json({
+    res.status(201).json({
       message: "Đăng ký thành công",
       token,
       user: {
         id: newUser._id,
         username: newUser.username,
         email: newUser.email,
-        age: newUser.age,
+        fullName: newUser.fullName,
         role: newUser.role,
+        isVerified: newUser.isVerified,
       },
     });
   } catch (err) {
-    return res.status(500).json({ message: "Lỗi server", error: err.message });
+    res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 };
 
@@ -55,39 +55,43 @@ export const signup = async (req, res) => {
 export const signin = async (req, res) => {
   try {
     const { username, password } = req.body;
-
     if (!username || !password)
       return res.status(400).json({ error: "Thiếu thông tin đăng nhập" });
 
-    // ✅ Cho phép đăng nhập bằng username hoặc email
-    const existUser = await User.findOne({
+    const user = await User.findOne({
       $or: [{ username }, { email: username }],
     });
-    if (!existUser)
-      return res.status(400).json({ error: "Người dùng không tồn tại" });
+    if (!user)
+      return res.status(404).json({ error: "Người dùng không tồn tại" });
 
-    // ✅ Kiểm tra mật khẩu
-    const isPasswordCorrect = await bcryptjs.compare(password, existUser.password);
+    const isPasswordCorrect = await bcryptjs.compare(password, user.password);
     if (!isPasswordCorrect)
-      return res.status(400).json({ error: "Mật khẩu không đúng" });
+      return res.status(400).json({ error: "Mật khẩu không chính xác" });
 
-    // ✅ Sinh token JWT mới
-    const token = jwt.sign({ userId: existUser._id }, JWT_SECRET, { expiresIn: "7d" });
+    if (!user.isActive)
+      return res.status(403).json({ error: "Tài khoản đã bị khóa" });
 
-    // ✅ Trả về thông tin user và token
-    return res.status(200).json({
+    user.lastLogin = new Date();
+    await user.save();
+
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "7d" });
+
+    res.status(200).json({
       message: "Đăng nhập thành công",
       token,
       user: {
-        id: existUser._id,
-        username: existUser.username,
-        email: existUser.email,
-        age: existUser.age,
-        role: existUser.role,
+        id: user._id,
+        username: user.username,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
+        role: user.role,
+        isVerified: user.isVerified,
       },
     });
   } catch (error) {
-    return res.status(500).json({ error: "Lỗi máy chủ nội bộ", detail: error.message });
+    res.status(500).json({ error: "Lỗi máy chủ nội bộ", detail: error.message });
   }
 };
 
@@ -101,13 +105,14 @@ export const searchUsers = async (req, res) => {
       $or: [
         { username: { $regex: query, $options: "i" } },
         { email: { $regex: query, $options: "i" } },
+        { fullName: { $regex: query, $options: "i" } },
       ],
     })
-      .select("_id username email")
+      .select("_id username fullName email avatar role")
       .limit(10);
 
-    return res.json(users);
+    res.json(users);
   } catch (err) {
-    return res.status(500).json({ message: "Lỗi server", error: err.message });
+    res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 };

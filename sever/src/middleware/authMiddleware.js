@@ -1,25 +1,18 @@
-// middleware/authMiddleware.js
+// middleware/authMiddleware.ts
 import jwt from "jsonwebtoken";
-import User from "../models/userModel.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "teamBill_secret";
 
-export const verifyToken = async (req, res, next) => {
+export const verifyToken = (req, res, next) => {
   try {
-    const header = req.headers.authorization;
-    if (!header || !header.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Thiếu token truy cập" });
-    }
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ message: "Thiếu token" });
 
-    const token = header.split(" ")[1];
+    const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, JWT_SECRET);
-
-    const user = await User.findById(decoded.userId).select("_id username email role");
-    if (!user) return res.status(401).json({ message: "Token không hợp lệ" });
-
-    req.user = user; // 🔹 gắn user vào req để controller có thể truy cập
+    req.user = decoded; // gắn userId vào req.user
     next();
-  } catch (err) {
-    res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn" });
+  } catch {
+    res.status(403).json({ message: "Token không hợp lệ" });
   }
 };
