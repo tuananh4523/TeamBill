@@ -30,7 +30,7 @@ import {
   Tooltip as ReTooltip,
   ResponsiveContainer,
 } from "recharts";
-import { useAuth } from "@/context/AuthContext"; // ✅ Thêm dòng này
+import { useAuth } from "@/context/AuthContext";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -54,7 +54,7 @@ interface ChartData {
 }
 
 export default function DashboardPage() {
-  const { user, loading: authLoading } = useAuth(); // ✅ Lấy user từ context
+  const { user, loading: authLoading } = useAuth(); //  Lấy user từ context
 
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,33 +62,56 @@ export default function DashboardPage() {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [timeRange, setTimeRange] = useState("Tháng này");
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user?._id) return; // ✅ chỉ fetch khi có user
-      try {
-        setLoading(true);
-        const walletRes = await axios.get(`${API_BASE}/wallet/info/${user._id}`);
-        setWallet(walletRes.data.vi || walletRes.data);
+useEffect(() => {
+  const fetchData = async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      const token = user.token;
 
-        const chartRes = await axios.get(`${API_BASE}/wallet/summary/${user._id}`);
-        setChartData(chartRes.data || []);
-      } catch {
-        message.error("Không thể tải dữ liệu ví");
-      } finally {
-        setLoading(false);
+      const walletRes = await axios.get(`${API_BASE}/wallet/info`, {
+        params: { userId: user.id },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (walletRes.data.success) {
+        setWallet({
+          balance: walletRes.data.balance,
+          refCode: walletRes.data.refCode,
+          bankInfo: walletRes.data.bankInfo,
+        });
       }
-    };
 
-    if (user) fetchData();
-    else {
-      setWallet(null);
-      setChartData([]);
+      const chartRes = await axios.get(`${API_BASE}/expenses/summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const sum = chartRes.data;
+      const mock = [
+        { month: "T1", income: sum.totalAmount || 0, expense: sum.count * 50000 },
+        { month: "T2", income: sum.totalAmount / 2 || 0, expense: sum.count * 70000 },
+        { month: "T3", income: sum.totalAmount / 3 || 0, expense: sum.count * 90000 },
+      ];
+      setChartData(mock);
+    } catch (err) {
+      console.error(err);
+      message.error("Không thể tải dữ liệu ví");
+    } finally {
+      setLoading(false);
     }
-  }, [user]);
+  };
+
+  if (user) fetchData();
+  else {
+    setWallet(null);
+    setChartData([]);
+  }
+}, [user]);
+
 
   const handleReload = () => window.location.reload();
 
-  // ✅ Nếu đang kiểm tra đăng nhập
+  //  Nếu đang kiểm tra đăng nhập
   if (authLoading)
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -96,7 +119,7 @@ export default function DashboardPage() {
       </div>
     );
 
-  // ✅ Nếu chưa đăng nhập
+  //  Nếu chưa đăng nhập
   if (!user)
     return (
       <div className="flex flex-col justify-center items-center min-h-screen text-gray-600">
@@ -104,7 +127,7 @@ export default function DashboardPage() {
       </div>
     );
 
-  // ✅ Giữ nguyên toàn bộ cấu trúc gốc bên dưới
+
   return (
     <Spin spinning={loading}>
       <div className="min-h-screen p-6">

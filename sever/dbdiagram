@@ -1,0 +1,182 @@
+////////////////////////////////////////////////////
+// 🧍 USER
+////////////////////////////////////////////////////
+Table User {
+  _id ObjectId [pk]
+  username string
+  password string
+  email string
+  phone string
+  fullName string
+  avatar string
+  gender string
+  dateOfBirth date
+  role string
+  isVerified boolean
+  verifyToken string
+  resetToken string
+  resetTokenExpiry datetime
+  lastLogin datetime
+  isActive boolean
+  address string
+  joinedAt datetime
+  createdAt datetime
+  updatedAt datetime
+}
+
+////////////////////////////////////////////////////
+// 💰 VITIEN
+////////////////////////////////////////////////////
+Table ViTien {
+  _id ObjectId [pk]
+  userId ObjectId
+  maThamChieu string
+  tenVi string
+  loaiVi string
+  soDu double
+  tongNap double
+  tongRut double
+  gioiHanRut double
+  gioiHanNap double
+  thongTinNganHang_chuTaiKhoan string
+  thongTinNganHang_soTaiKhoan string
+  thongTinNganHang_maNganHang string
+  thongTinNganHang_maNapas string
+  thongTinNganHang_tenNganHang string
+  trangThai string
+  maPIN string
+  isLinkedBank boolean
+  ngayKichHoat datetime
+  lanCapNhatCuoi datetime
+  createdAt datetime
+  updatedAt datetime
+}
+
+////////////////////////////////////////////////////
+// 💳 GIAODICH
+////////////////////////////////////////////////////
+Table GiaoDich {
+  _id ObjectId [pk]
+  walletId ObjectId
+  userId ObjectId
+  code string
+  refCode string
+  type string
+  direction string
+  category string
+  amount double
+  fee double
+  balanceBefore double
+  balanceAfter double
+  description string
+  status string
+  deviceInfo string
+  date datetime
+  confirmedAt datetime
+  createdAt datetime
+  updatedAt datetime
+}
+
+////////////////////////////////////////////////////
+// 👥 TEAM
+////////////////////////////////////////////////////
+Table Team {
+  _id ObjectId [pk]
+  name string
+  description string
+  avatar string
+  maThamChieu string
+  createdBy ObjectId
+  membersCount int
+  viTeamId ObjectId
+  privacy string
+  status string
+  totalExpense double
+  lastActivity datetime
+  createdAt datetime
+  updatedAt datetime
+}
+
+////////////////////////////////////////////////////
+// 🧩 MEMBER
+////////////////////////////////////////////////////
+Table Member {
+  _id ObjectId [pk]
+  userId ObjectId
+  teamId ObjectId
+  name string
+  email string
+  avatar string
+  role string
+  status string
+  joinedAt datetime
+  leftAt datetime
+  contribution double
+  balance double
+  createdAt datetime
+  updatedAt datetime
+}
+
+////////////////////////////////////////////////////
+// 💸 EXPENSE
+////////////////////////////////////////////////////
+Table Expense {
+  _id ObjectId [pk]
+  teamId ObjectId
+  createdBy ObjectId
+  title string
+  amount double
+  category string
+  description string
+  status string
+  paidBy ObjectId
+  splitMethod string
+  date datetime
+  createdAt datetime
+  updatedAt datetime
+}
+
+////////////////////////////////////////////////////
+// 🔢 SPLIT
+////////////////////////////////////////////////////
+Table Split {
+  _id ObjectId [pk]
+  expenseId ObjectId
+  teamId ObjectId
+  total double
+  method string
+  currency string
+  date datetime
+  createdAt datetime
+  updatedAt datetime
+}
+
+Table SplitMember {
+  _id ObjectId [pk]
+  splitId ObjectId
+  memberId ObjectId
+  name string
+  paid double
+  owed double
+  balance double
+  createdAt datetime
+  updatedAt datetime
+}
+
+////////////////////////////////////////////////////
+// 🔗 RELATIONSHIPS
+////////////////////////////////////////////////////
+Ref: ViTien.userId > User._id
+Ref: GiaoDich.walletId > ViTien._id
+Ref: GiaoDich.userId > User._id
+Ref: Team.createdBy > User._id
+Ref: Team.viTeamId > ViTien._id
+Ref: Member.userId > User._id
+Ref: Member.teamId > Team._id
+Ref: Expense.teamId > Team._id
+Ref: Expense.createdBy > User._id
+Ref: Expense.paidBy > Member._id
+Ref: Split.expenseId > Expense._id
+Ref: Split.teamId > Team._id
+Ref: SplitMember.splitId > Split._id
+Ref: SplitMember.memberId > Member._id

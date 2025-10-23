@@ -5,8 +5,9 @@ import axios, { AxiosError } from "axios";
 import { Avatar } from "antd";
 import { UserOutlined } from "@ant-design/icons";
 
-/* ================== Types ================== */
+/* ================== Kiểu dữ liệu ================== */
 export type User = {
+  _id?: string;
   username: string;
   email?: string;
   age?: number;
@@ -24,6 +25,9 @@ interface ApiError {
   error?: string;
 }
 
+/* ================== API BASE ================== */
+const API_BASE = "http://localhost:8080/api";
+
 /* ================== Component ================== */
 const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
@@ -36,57 +40,60 @@ const AuthModal: React.FC<AuthModalProps> = ({
   const [email, setEmail] = useState("");
   const [age, setAge] = useState<number | "">("");
   const [messageText, setMessageText] = useState("");
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>
-  ): Promise<void> => {
+  /* ================== Gửi form ================== */
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
+    setMessageText("");
+    setLoading(true);
 
     try {
       const url = isLogin
-        ? "http://localhost:8080/api/user/signin"
-        : "http://localhost:8080/api/user/signup";
+        ? `${API_BASE}/user/signin`
+        : `${API_BASE}/user/signup`;
 
-      const payload: Record<string, string | number> = isLogin
+      const payload = isLogin
         ? { username, password }
         : { username, password, email, age: typeof age === "number" ? age : 0 };
 
       const res = await axios.post<User>(url, payload);
+      const userData = res.data;
 
       if (isLogin) {
-        const userData = res.data;
-        if (userData.token) localStorage.setItem("token", userData.token);
+        if (userData.token) {
+          localStorage.setItem("token", userData.token);
+        }
         onLoginSuccess(userData);
         onClose();
       } else {
-        const agree = window.confirm(
-          "Đăng ký thành công! Bạn có muốn chuyển sang đăng nhập?"
-        );
-        if (agree) setIsLogin(true);
+        alert("Đăng ký thành công! Hãy đăng nhập để tiếp tục.");
+        setIsLogin(true);
       }
     } catch (err) {
-      // ✅ Không dùng any — kiểm tra kiểu AxiosError rõ ràng
       if (axios.isAxiosError(err)) {
         const axiosErr = err as AxiosError<ApiError>;
         const msg =
           axiosErr.response?.data?.message ||
           axiosErr.response?.data?.error ||
-          "Có lỗi xảy ra khi kết nối server.";
+          "Không thể kết nối đến máy chủ.";
         setMessageText(msg);
       } else if (err instanceof Error) {
         setMessageText(err.message);
       } else {
-        setMessageText("Lỗi không xác định.");
+        setMessageText("Đã xảy ra lỗi không xác định.");
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50">
       <div className="relative w-full max-w-md p-8 rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 shadow-2xl border border-white/10">
-        {/* Nút đóng */}
+        {/* Đóng */}
         <button
           onClick={onClose}
           className="absolute top-3 right-3 text-gray-400 hover:text-red-400 text-xl"
@@ -99,7 +106,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
           <Avatar
             size={64}
             icon={<UserOutlined />}
-            style={{ backgroundColor: "#1890ff" }}
+            style={{ backgroundColor: "#1677ff" }}
           />
         </div>
 
@@ -154,9 +161,18 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-500 to-teal-400 hover:opacity-90 transition-all duration-300 shadow-lg"
+            disabled={loading}
+            className={`w-full py-3 rounded-xl font-semibold text-white transition-all duration-300 shadow-lg ${
+              loading
+                ? "bg-gray-500 cursor-not-allowed"
+                : "bg-gradient-to-r from-blue-500 to-teal-400 hover:opacity-90"
+            }`}
           >
-            {isLogin ? "Đăng nhập" : "Đăng ký"}
+            {loading
+              ? "Đang xử lý..."
+              : isLogin
+              ? "Đăng nhập"
+              : "Đăng ký"}
           </button>
         </form>
 
@@ -166,6 +182,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
         <div className="text-center mt-6">
           <button
+            type="button"
             onClick={() => setIsLogin((prev) => !prev)}
             className="text-sm text-gray-300 hover:text-blue-400 transition"
           >

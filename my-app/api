@@ -2,10 +2,10 @@ Danh sách API
 1. User
 
 Đăng ký
-POST http://localhost:8080/api/user/signup
+POST http://localhost:8080/api/users/signup
 
 Đăng nhập
-POST http://localhost:8080/api/user/signin
+POST http://localhost:8080/api/users/signin
 
 2. Team
 

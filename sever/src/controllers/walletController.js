@@ -1,199 +1,228 @@
+// controllers/walletController.js
 import ViTien from "../models/walletModel.js";
 import GiaoDich from "../models/transactionModel.js";
-import { giaoDichSchema, walletSchema } from "../schema/walletSchema.js";
+import { walletSchema, giaoDichSchema } from "../schema/walletSchema.js";
 
 const napasMap = { MB: "970422", VCB: "970436", TCB: "970407" };
-const VIETQR_IMAGE = "https://img.vietqr.io/image/MB-3666904052003-qr_only.png";
 
-// ===================== TẠO VÍ MẶC ĐỊNH =====================
-export const taoViMacDinh = async (userId) => {
-  let vi = await ViTien.findOne({ userId });
-  if (!vi) {
-    vi = await ViTien.create({
-      userId,
-      soDu: 0,
-      maThamChieu: "REF" + Date.now(),
-      thongTinNganHang: {
-        chuTaiKhoan: "NGUYEN VAN TUAN ANH",
-        soTaiKhoan: "3666904052003",
-        maNganHang: "MB",
-        maNapas: napasMap["MB"],
-      },
-    });
-  }
-  return vi;
-};
+// Helper: flatten banking fields theo form
+const flattenBank = (vi) => ({
+  thongTinNganHang_chuTaiKhoan: vi.thongTinNganHang?.chuTaiKhoan || "",
+  thongTinNganHang_soTaiKhoan:  vi.thongTinNganHang?.soTaiKhoan  || "",
+  thongTinNganHang_maNganHang:  vi.thongTinNganHang?.maNganHang  || "",
+  thongTinNganHang_maNapas:     vi.thongTinNganHang?.maNapas     || "",
+  thongTinNganHang_tenNganHang: vi.thongTinNganHang?.tenNganHang || "",
+});
 
-// ===================== TẠO VÍ =====================
+// ===================== Tạo ví mới =====================
 export const createWallet = async (req, res) => {
   try {
     const { error } = walletSchema.validate(req.body, { abortEarly: false });
-    if (error)
-      return res.status(400).json({ success: false, message: error.details.map(m => m.message) });
+    if (error) return res.status(400).json({ message: error.details.map((m) => m.message) });
 
-    const { userId, chuTaiKhoan, soTaiKhoan, maNganHang } = req.body;
-    const existed = await ViTien.findOne({ userId });
-    if (existed)
-      return res.status(400).json({ success: false, message: "Người dùng đã có ví" });
+    const {
+      userId, tenVi, loaiVi, chuTaiKhoan, soTaiKhoan, maNganHang, maNapas, tenNganHang,
+      gioiHanRut, gioiHanNap, maPIN, isLinkedBank
+    } = req.body;
+
+    const exist = await ViTien.findOne({ userId });
+    if (exist) return res.status(400).json({ message: "Người dùng đã có ví" });
 
     const vi = await ViTien.create({
       userId,
-      soDu: 0,
       maThamChieu: "REF" + Date.now(),
-      thongTinNganHang: {
-        chuTaiKhoan,
-        soTaiKhoan,
-        maNganHang,
-        maNapas: napasMap[maNganHang] || "970422",
-      },
+      tenVi,
+      loaiVi,
+      gioiHanRut,
+      gioiHanNap,
+      maPIN,
+      isLinkedBank: typeof isLinkedBank === "boolean" ? isLinkedBank : true,
+      thongTinNganHang: { chuTaiKhoan, soTaiKhoan, maNganHang, maNapas, tenNganHang },
+      ngayKichHoat: new Date(),
     });
 
-    res.json({ success: true, message: "Tạo ví thành công", vi });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// ===================== LẤY THÔNG TIN VÍ =====================
-export const getWalletInfo = async (req, res) => {
-  try {
-    const { userId } = req.query;
-    const vi = await taoViMacDinh(userId);
-    res.json({
-      success: true,
-      balance: vi.soDu,
-      refCode: vi.maThamChieu,
-      bankInfo: vi.thongTinNganHang,
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// ===================== DANH SÁCH GIAO DỊCH =====================
-export const getTransactions = async (req, res) => {
-  try {
-    const { userId } = req.query;
-    const vi = await ViTien.findOne({ userId });
-    if (!vi) return res.status(404).json({ message: "Không tìm thấy ví" });
-
-    const ds = await GiaoDich.find({ walletId: vi._id }).sort({ createdAt: -1 });
-    res.json({ success: true, transactions: ds });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// ===================== GIAO DỊCH CHUNG =====================
-export const createTransaction = async (req, res) => {
-  try {
-    const { error } = giaoDichSchema.validate(req.body, { abortEarly: false });
-    if (error)
-      return res.status(400).json({ message: error.details.map(d => d.message) });
-
-    const { userId, loai, soTien, moTa } = req.body;
-    const vi = await taoViMacDinh(userId);
-    const huong = loai === "NAP" ? "CONG" : "TRU";
-
-    if (huong === "TRU" && vi.soDu < soTien)
-      return res.status(400).json({ message: "Số dư không đủ" });
-
-    const gd = await GiaoDich.create({
-      walletId: vi._id,
-      code: "GD" + Date.now(),
-      type: loai,
-      direction: huong,
-      amount: soTien,
-      description: moTa || "",
-      status: "THANHCONG",
-    });
-
-    vi.soDu += huong === "CONG" ? soTien : -soTien;
-    await vi.save();
-
-    res.status(201).json({ message: "Giao dịch thành công", transaction: gd, newBalance: vi.soDu });
+    res.status(201).json({ message: "Tạo ví thành công", vi });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// ===================== QR MB BANK (CỐ ĐỊNH) =====================
-export const taoQRVietQR = async (req, res) => {
+// ===================== Lấy thông tin ví =====================
+export const getWalletInfo = async (req, res) => {
   try {
-    const { userId } = req.body;
-    const vi = await taoViMacDinh(userId);
+    const { userId } = req.query;
+    const vi = await ViTien.findOne({ userId });
+    if (!vi) return res.status(404).json({ message: "Không tìm thấy ví" });
+
     res.json({
-      success: true,
-      message: "QR cố định cho nạp tiền vào ví Team Bill",
-      qrUrl: VIETQR_IMAGE,
-      thongTinChuyenKhoan: {
-        nganHang: "MB Bank",
-        soTaiKhoan: "3666904052003",
-        chuTaiKhoan: "NGUYEN VAN TUAN ANH",
-        noiDung: `NAP_${vi.maThamChieu}`,
-      },
+      _id: vi._id,
+      userId: vi.userId,
+      maThamChieu: vi.maThamChieu,
+      tenVi: vi.tenVi,
+      loaiVi: vi.loaiVi,
+      soDu: vi.soDu,
+      tongNap: vi.tongNap,
+      tongRut: vi.tongRut,
+      gioiHanRut: vi.gioiHanRut,
+      gioiHanNap: vi.gioiHanNap,
+      trangThai: vi.trangThai,
+      maPIN: vi.maPIN || "",
+      isLinkedBank: vi.isLinkedBank,
+      ngayKichHoat: vi.ngayKichHoat,
+      lanCapNhatCuoi: vi.lanCapNhatCuoi,
+      createdAt: vi.createdAt,
+      updatedAt: vi.updatedAt,
+      ...flattenBank(vi),
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ===================== XÁC NHẬN NẠP TIỀN =====================
-export const xacNhanNapTien = async (req, res) => {
+// ===================== Lấy giao dịch (lọc + phân trang) =====================
+export const getTransactions = async (req, res) => {
   try {
-    const { userId, soTien } = req.body;
-    if (!userId || !soTien)
-      return res.status(400).json({ success: false, message: "Thiếu userId hoặc số tiền" });
+    const { userId, walletId, type, status, category, dateFrom, dateTo, page = 1, limit = 10 } = req.query;
 
+    const vi = walletId
+      ? await ViTien.findById(walletId)
+      : await ViTien.findOne({ userId });
+
+    if (!vi) return res.status(404).json({ message: "Không tìm thấy ví" });
+
+    const q = { walletId: vi._id };
+    if (type)     q.type = type;
+    if (status)   q.status = status;
+    if (category) q.category = category;
+    if (dateFrom || dateTo) {
+      q.date = {};
+      if (dateFrom) q.date.$gte = new Date(dateFrom);
+      if (dateTo)   q.date.$lte = new Date(dateTo);
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [items, total] = await Promise.all([
+      GiaoDich.find(q).sort({ date: -1 }).skip(skip).limit(Number(limit)),
+      GiaoDich.countDocuments(q),
+    ]);
+
+    res.json({
+      data: items,
+      pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) },
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ===================== Nạp tiền =====================
+export const napTien = async (req, res) => {
+  try {
+    const { error } = giaoDichSchema.validate(req.body, { abortEarly: false });
+    if (error) return res.status(400).json({ message: error.details.map((m) => m.message) });
+
+    const { userId, soTien, moTa = "Nạp tiền vào ví", fee = 0, deviceInfo = "", category = "TOPUP" } = req.body;
     const vi = await ViTien.findOne({ userId });
-    if (!vi) return res.status(404).json({ success: false, message: "Không tìm thấy ví" });
+    if (!vi) return res.status(404).json({ message: "Không tìm thấy ví" });
 
-    vi.soDu += Number(soTien);
+    const balanceBefore = vi.soDu;
+    const balanceAfter  = balanceBefore + Number(soTien) - Number(fee);
+
+    vi.soDu = balanceAfter;
+    vi.tongNap += Number(soTien);
+    vi.lanCapNhatCuoi = new Date();
     await vi.save();
 
     const gd = await GiaoDich.create({
       walletId: vi._id,
+      userId,
       code: "GD" + Date.now(),
+      refCode: "BANK" + Math.floor(Math.random() * 1e9),
       type: "NAP",
       direction: "CONG",
+      category,
       amount: soTien,
-      description: "Nạp tiền vào ví qua MB Bank",
+      fee,
+      balanceBefore,
+      balanceAfter,
+      description: moTa,
       status: "THANHCONG",
+      deviceInfo,
+      date: new Date(),
+      confirmedAt: new Date(),
     });
 
-    res.status(201).json({ success: true, message: "Nạp tiền thành công", transaction: gd, newBalance: vi.soDu });
+    res.status(201).json({ message: "Nạp tiền thành công", balance: vi.soDu, transaction: gd });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ===================== RÚT TIỀN =====================
+// ===================== Rút tiền =====================
 export const rutTien = async (req, res) => {
   try {
-    const { userId, soTien, nganHang, soTaiKhoan, chuTaiKhoan } = req.body;
-    if (!userId || !soTien)
-      return res.status(400).json({ success: false, message: "Thiếu thông tin" });
+    const { error } = giaoDichSchema.validate(req.body, { abortEarly: false });
+    if (error) return res.status(400).json({ message: error.details.map((m) => m.message) });
 
+    const { userId, soTien, moTa = "Rút tiền khỏi ví", fee = 0, deviceInfo = "", category = "WITHDRAW" } = req.body;
     const vi = await ViTien.findOne({ userId });
-    if (!vi) return res.status(404).json({ success: false, message: "Không tìm thấy ví" });
-    if (vi.soDu < soTien)
-      return res.status(400).json({ success: false, message: "Số dư không đủ để rút" });
+    if (!vi) return res.status(404).json({ message: "Không tìm thấy ví" });
 
-    vi.soDu -= Number(soTien);
+    const totalDebit = Number(soTien) + Number(fee);
+    if (vi.soDu < totalDebit) return res.status(400).json({ message: "Số dư không đủ để rút" });
+
+    const balanceBefore = vi.soDu;
+    const balanceAfter  = balanceBefore - totalDebit;
+
+    vi.soDu = balanceAfter;
+    vi.tongRut += Number(soTien);
+    vi.lanCapNhatCuoi = new Date();
     await vi.save();
 
     const gd = await GiaoDich.create({
       walletId: vi._id,
+      userId,
       code: "GD" + Date.now(),
+      refCode: "BANK" + Math.floor(Math.random() * 1e9),
       type: "RUT",
       direction: "TRU",
+      category,
       amount: soTien,
-      description: `Rút ${soTien.toLocaleString()}đ về ${nganHang} (${soTaiKhoan}) - ${chuTaiKhoan}`,
+      fee,
+      balanceBefore,
+      balanceAfter,
+      description: moTa,
       status: "THANHCONG",
+      deviceInfo,
+      date: new Date(),
+      confirmedAt: new Date(),
     });
 
-    res.status(201).json({ success: true, message: "Rút tiền thành công", transaction: gd, newBalance: vi.soDu });
+    res.status(201).json({ message: "Rút tiền thành công", balance: vi.soDu, transaction: gd });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ===================== Tạo QR VietQR (mock) =====================
+export const taoQRVietQR = async (req, res) => {
+  try {
+    const { userId, amount = 0, description = "" } = req.body;
+    const vi = await ViTien.findOne({ userId });
+    if (!vi) return res.status(404).json({ message: "Không tìm thấy ví" });
+
+    const bank = vi.thongTinNganHang;
+    const napas = bank.maNapas || napasMap[bank.maNganHang] || "970422";
+
+    // Link QR kiểu VietQR (mock demo): đổi sang service bạn dùng thực tế nếu cần
+    const url = `https://img.vietqr.io/image/${napas}-${bank.soTaiKhoan}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(description)}&accountName=${encodeURIComponent(bank.chuTaiKhoan)}`;
+
+    res.json({
+      maThamChieu: vi.maThamChieu,
+      qr: { image: url, amount, description },
+      ...flattenBank(vi),
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
