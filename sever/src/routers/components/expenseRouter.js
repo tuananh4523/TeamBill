@@ -6,9 +6,9 @@ import {
   updateExpense,
   deleteExpense,
   getExpensesSummary
-} from "../controllers/expenseController.js";
-import { validate } from "../middleware/validate.js";
-import { expenseSchema } from "../schema/expenseSchema.js";
+} from "../controllers/components/expenseController.js";
+import { validate } from "../../middleware/validate.js";
+import { expenseSchema } from "../../schema/expenseSchema.js";
 
 const expenseRouter = express.Router();
 // Summary

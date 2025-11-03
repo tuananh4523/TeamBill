@@ -8,32 +8,26 @@ import {
   ReactNode,
   ReactElement,
 } from "react";
-import axios from "axios";
 import { message } from "antd";
 import { setCookie, getCookie, deleteCookie } from "cookies-next";
+import axios from "../lib/axiosConfig"
 
 /* ================== Kiểu dữ liệu ================== */
 export interface User {
-  _id: string;
-  username: string;
+  _id?: string; // backend có thể trả _id hoặc id
   id?: string;
+  username: string;
   email?: string;
   token?: string;
   role?: string;
 }
 
-export interface BankInfo {
-  chuTaiKhoan: string;
-  soTaiKhoan: string;
-  maNganHang: string;
-  maNapas: string;
-}
-
 export interface WalletInfo {
-  success: boolean;
-  balance: number;
-  refCode: string;
-  bankInfo: BankInfo;
+  _id?: string;
+  soDu: number;
+  maThamChieu: string;
+  thongTinNganHang_tenNganHang: string;
+  thongTinNganHang_soTaiKhoan: string;
 }
 
 export interface Transaction {
@@ -43,9 +37,9 @@ export interface Transaction {
   type: "NAP" | "RUT" | "CHUYEN" | "THANHTOAN";
   direction: "CONG" | "TRU";
   amount: number;
-  description: string;
+  description?: string;
   status: "THANHCONG" | "CHO" | "THATBAI";
-  createdAt: string;
+  date: string;
 }
 
 export interface Expense {
@@ -75,6 +69,7 @@ export interface Team {
 export interface SplitMember {
   name: string;
   paid: number;
+  owed?: number;
 }
 
 export interface Split {
@@ -98,7 +93,7 @@ export interface GlobalData {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (userData: User) => Promise<void>;
+  login: (data: { token: string; user: User }) => Promise<void>;
   logout: () => void;
   refreshUserData: () => Promise<void>;
   globalData: GlobalData | null;
@@ -118,79 +113,84 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 /* ================== Component chính ================== */
-export const AuthProvider = ({ children }: { children: ReactNode }): ReactElement => {
+export const AuthProvider = ({
+  children,
+}: {
+  children: ReactNode;
+}): ReactElement => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [globalData, setGlobalData] = useState<GlobalData | null>(null);
 
+  /* ================== Khôi phục đăng nhập ================== */
   useEffect(() => {
-    const init = async (): Promise<void> => {
-      const storedUser = localStorage.getItem("user");
-      const cookieToken = getCookie("accessToken") as string | undefined;
+    const restoreSession = async (): Promise<void> => {
+      try {
+        const storedUser = localStorage.getItem("user");
+        const token = getCookie("accessToken") as string | null;
 
-      console.log("[Init] Cookie Token:", cookieToken);
-      console.log("[Init] Stored User:", storedUser);
-
-      if (storedUser && cookieToken) {
-        try {
-          const parsed: User = JSON.parse(storedUser);
-          const normalized: User = {
-            _id: parsed._id || parsed.id || "",
+        if (storedUser && token) {
+          const parsed = JSON.parse(storedUser) as User;
+          const normalizedUser: User = {
+            _id: parsed._id ?? parsed.id ?? "",
+            id: parsed._id ?? parsed.id ?? "",
             username: parsed.username,
             email: parsed.email,
-            token: cookieToken,
             role: parsed.role,
+            token,
           };
 
-          if (normalized._id && cookieToken) {
-            console.log("[Init] Đã khôi phục user:", normalized.username);
-            console.log("[Init] ID:", normalized._id);
-            setUser(normalized);
-            axios.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
-            await loadGlobalData(normalized._id);
-          } else {
-            console.warn("[Init] Không tìm thấy userId hoặc token hợp lệ.");
-            localStorage.clear();
-            deleteCookie("accessToken");
-          }
-        } catch {
-          console.error("[Init] Parse user từ localStorage thất bại!");
-          localStorage.clear();
-          deleteCookie("accessToken");
+          axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+          setUser(normalizedUser);
+          await loadGlobalData(normalizedUser._id || "");
         }
+      } catch (err) {
+        console.error("[Auth] Khôi phục thất bại:", err);
+        handleSessionInvalid();
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    void init();
+    void restoreSession();
   }, []);
 
-  const login = async (userData: User): Promise<void> => {
-    const normalized: User = {
-      ...userData,
-      _id: userData._id || userData.id || "",
-    };
+  /* ================== Đăng nhập ================== */
+  const login = async (resData: {
+    token: string;
+    user: User;
+  }): Promise<void> => {
+    const { token, user: rawUser } = resData;
 
-    if (!normalized.token) {
+    if (!token) {
       message.error("Không có token trả về từ server.");
-      console.error("[Login] Server không trả token!");
       return;
     }
 
-    setCookie("accessToken", normalized.token, { maxAge: 7 * 24 * 60 * 60 });
-    localStorage.setItem("user", JSON.stringify(normalized));
-    localStorage.setItem("token", normalized.token);
-    axios.defaults.headers.common["Authorization"] = `Bearer ${normalized.token}`;
-    setUser(normalized);
+    // Chuẩn hóa user id (_id hoặc id)
+    const normalizedUser: User = {
+      _id: rawUser._id ?? rawUser.id ?? "",
+      id: rawUser._id ?? rawUser.id ?? "",
+      username: rawUser.username,
+      email: rawUser.email,
+      role: rawUser.role,
+      token,
+    };
 
-    console.log("[Login] Token đã lưu:", normalized.token);
-    console.log("[Login] ID người dùng:", normalized._id);
-    console.log("[Login] Username:", normalized.username);
+    // Lưu token + user vào cookie và localStorage
+    setCookie("accessToken", token, { maxAge: 7 * 24 * 60 * 60 });
+    localStorage.setItem("accessToken", token);
+    localStorage.setItem("user", JSON.stringify(normalizedUser));
 
-    message.success(`Xin chào ${normalized.username}`);
-    await loadGlobalData(normalized._id);
+    // Cấu hình axios
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    setUser(normalizedUser);
+
+    message.success(`Xin chào ${normalizedUser.username}`);
+    await loadGlobalData(normalizedUser._id || "");
   };
 
+  /* ================== Đăng xuất ================== */
   const logout = (): void => {
     console.log("[Logout] Xóa token và user.");
     setUser(null);
@@ -201,13 +201,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }): ReactElemen
     message.info("Đã đăng xuất.");
   };
 
+  /* ================== Phiên không hợp lệ ================== */
+  const handleSessionInvalid = (): void => {
+    localStorage.clear();
+    deleteCookie("accessToken");
+    setUser(null);
+    setGlobalData(null);
+  };
+
+  /* ================== Làm mới user ================== */
   const refreshUserData = async (): Promise<void> => {
     try {
       const token = getCookie("accessToken") as string | undefined;
-      if (!token) {
-        console.warn("[Refresh] Không tìm thấy token, đăng xuất!");
-        return logout();
-      }
+      if (!token) return logout();
 
       const res = await axios.get<{ user: User }>(`${API_BASE}/user/profile`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -215,10 +221,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }): ReactElemen
 
       const updatedUser = res.data?.user;
       if (updatedUser) {
-        console.log("[Refresh] Làm mới dữ liệu user:", updatedUser.username);
-        setUser(updatedUser);
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        await loadGlobalData(updatedUser._id);
+        const normalizedUser: User = {
+          _id: updatedUser._id ?? updatedUser.id ?? "",
+          username: updatedUser.username,
+          email: updatedUser.email,
+          role: updatedUser.role,
+          token,
+        };
+
+        setUser(normalizedUser);
+        localStorage.setItem("user", JSON.stringify(normalizedUser));
+        await loadGlobalData(normalizedUser._id || "");
       }
     } catch (err) {
       console.error("[Refresh] Lỗi khi làm mới dữ liệu:", err);
@@ -226,39 +239,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }): ReactElemen
     }
   };
 
+  /* ================== Tải dữ liệu toàn hệ thống ================== */
   const loadGlobalData = async (userId: string): Promise<void> => {
+    if (!userId) return;
     try {
-      console.log("[LoadData] Đang tải dữ liệu cho userId:", userId);
-
       const [walletRes, transRes, teamRes, expenseRes, memberRes, splitRes] =
         await Promise.all([
-          axios.get<WalletInfo>(`${API_BASE}/wallet/info`, { params: { userId } }),
-          axios.get<{ success: boolean; transactions: Transaction[] }>(
-            `${API_BASE}/wallet/transactions`,
-            { params: { userId } }
-          ),
-          axios.get<Team[]>(`${API_BASE}/teams`),
-          axios.get<Expense[]>(`${API_BASE}/expenses`),
-          axios.get<Member[]>(`${API_BASE}/members`),
-          axios.get<Split[]>(`${API_BASE}/splits`),
+          axios.get(`${API_BASE}/wallet/info`, { params: { userId } }),
+          axios.get(`${API_BASE}/wallet/transactions`, { params: { userId } }),
+          axios.get(`${API_BASE}/teams`),
+          axios.get(`${API_BASE}/expenses`),
+          axios.get(`${API_BASE}/members`),
+          axios.get(`${API_BASE}/splits`),
         ]);
 
       const newData: GlobalData = {
         wallet: walletRes.data,
-        transactions: transRes.data.transactions || [],
+        transactions: transRes.data.data || [],
         teams: teamRes.data,
         expenses: expenseRes.data,
         members: memberRes.data,
         splits: splitRes.data,
       };
 
-      console.log("[LoadData] Ví:", newData.wallet?.balance);
-      console.log("[LoadData] Số giao dịch:", newData.transactions.length);
-
       setGlobalData(newData);
       localStorage.setItem("globalData", JSON.stringify(newData));
     } catch (error) {
-      console.warn("[LoadData] Không thể tải dữ liệu toàn hệ thống:", error);
+      console.warn("[LoadData] Không thể tải dữ liệu:", error);
     }
   };
 

@@ -1,4 +1,4 @@
-import Team from "../models/teamModel.js";
+import Team from "../../models/teamModel.js";
 
 // Tạo team mới
 export const createTeam = async (req, res) => {

@@ -154,7 +154,7 @@ export const getExpensesSummary = async (req, res) => {
       count: total[0].count
     })
   } catch (error) {
-    console.error('❌ Summary error:', error)
+    console.error(' Summary error:', error)
     res.status(500).json({ error: error.message })
   }
 }

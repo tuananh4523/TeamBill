@@ -6,7 +6,7 @@ import {
   createMember,
   updateMember,
   deleteMember,
-} from "../controllers/memberController.js";
+} from "../controllers/components/memberController.js";
 
 const memberRouter = express.Router();
 

@@ -2,49 +2,32 @@
 
 import React, { useState } from "react";
 import axios, { AxiosError } from "axios";
-import { Avatar } from "antd";
+import { Avatar, message } from "antd";
 import { UserOutlined } from "@ant-design/icons";
-
-/* ================== Kiểu dữ liệu ================== */
-export type User = {
-  _id?: string;
-  username: string;
-  email?: string;
-  age?: number;
-  token?: string;
-};
-
-export interface AuthModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onLoginSuccess: (user: User) => void;
-}
+import { useAuth } from "@/context/AuthContext";
 
 interface ApiError {
   message?: string;
   error?: string;
 }
 
-/* ================== API BASE ================== */
 const API_BASE = "http://localhost:8080/api";
 
-/* ================== Component ================== */
-const AuthModal: React.FC<AuthModalProps> = ({
+const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   isOpen,
   onClose,
-  onLoginSuccess,
 }) => {
+  const { login } = useAuth();
+
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
-  const [age, setAge] = useState<number | "">("");
-  const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [messageText, setMessageText] = useState("");
 
   if (!isOpen) return null;
 
-  /* ================== Gửi form ================== */
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     setMessageText("");
@@ -57,19 +40,20 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
       const payload = isLogin
         ? { username, password }
-        : { username, password, email, age: typeof age === "number" ? age : 0 };
+        : { username, password, email };
 
-      const res = await axios.post<User>(url, payload);
-      const userData = res.data;
+      const res = await axios.post(url, payload);
+      const data = res.data;
 
       if (isLogin) {
-        if (userData.token) {
-          localStorage.setItem("token", userData.token);
+        if (data?.token && data?.user) {
+          await login({ token: data.token, user: data.user });
+          onClose();
+        } else {
+          message.error("Phản hồi từ máy chủ không hợp lệ.");
         }
-        onLoginSuccess(userData);
-        onClose();
       } else {
-        alert("Đăng ký thành công! Hãy đăng nhập để tiếp tục.");
+        message.success("Đăng ký thành công! Vui lòng đăng nhập để tiếp tục.");
         setIsLogin(true);
       }
     } catch (err) {
@@ -79,7 +63,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
           axiosErr.response?.data?.message ||
           axiosErr.response?.data?.error ||
           "Không thể kết nối đến máy chủ.";
-        setMessageText(msg);
+        setMessageText(Array.isArray(msg) ? msg.join(", ") : msg);
       } else if (err instanceof Error) {
         setMessageText(err.message);
       } else {
@@ -93,7 +77,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50">
       <div className="relative w-full max-w-md p-8 rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 shadow-2xl border border-white/10">
-        {/* Đóng */}
         <button
           onClick={onClose}
           className="absolute top-3 right-3 text-gray-400 hover:text-red-400 text-xl"
@@ -101,7 +84,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
           ✕
         </button>
 
-        {/* Avatar */}
         <div className="flex justify-center mb-4">
           <Avatar
             size={64}
@@ -110,12 +92,10 @@ const AuthModal: React.FC<AuthModalProps> = ({
           />
         </div>
 
-        {/* Tiêu đề */}
         <h2 className="text-3xl font-bold text-center mb-6 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">
           {isLogin ? "Đăng nhập" : "Tạo tài khoản"}
         </h2>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
@@ -127,27 +107,14 @@ const AuthModal: React.FC<AuthModalProps> = ({
           />
 
           {!isLogin && (
-            <>
-              <input
-                type="email"
-                placeholder="Địa chỉ email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-black/30 text-white placeholder-gray-400 border border-gray-700 focus:border-green-400 outline-none"
-                required
-              />
-              <input
-                type="number"
-                placeholder="Tuổi"
-                value={age}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : "";
-                  setAge(val);
-                }}
-                className="w-full px-4 py-3 rounded-xl bg-black/30 text-white placeholder-gray-400 border border-gray-700 focus:border-green-400 outline-none"
-                required
-              />
-            </>
+            <input
+              type="email"
+              placeholder="Địa chỉ email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-black/30 text-white placeholder-gray-400 border border-gray-700 focus:border-green-400 outline-none"
+              required
+            />
           )}
 
           <input

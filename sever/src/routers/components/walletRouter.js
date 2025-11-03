@@ -7,8 +7,8 @@ import {
   napTien,
   rutTien,
   taoQRVietQR,
-} from "../controllers/walletController.js";
-import { verifyToken } from "../middleware/authMiddleware.js";
+} from "../controllers/components/walletController.js";
+import { verifyToken } from "../../middleware/authMiddleware.js";
 
 const router = express.Router();
 
