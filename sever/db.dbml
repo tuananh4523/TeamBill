@@ -25,37 +25,39 @@ Table User {
 }
 
 ////////////////////////////////////////////////////
-// 💰 VITIEN
+// 💰 WALLET
 ////////////////////////////////////////////////////
-Table ViTien {
+Table Wallet {
   _id ObjectId [pk]
   userId ObjectId
-  maThamChieu string
-  tenVi string
-  loaiVi string
-  soDu double
-  tongNap double
-  tongRut double
-  gioiHanRut double
-  gioiHanNap double
-  thongTinNganHang_chuTaiKhoan string
-  thongTinNganHang_soTaiKhoan string
-  thongTinNganHang_maNganHang string
-  thongTinNganHang_maNapas string
-  thongTinNganHang_tenNganHang string
-  trangThai string
-  maPIN string
+  refCode string
+  walletName string
+  walletType string
+  balance double
+  totalDeposit double
+  totalWithdraw double
+  withdrawLimit double
+  depositLimit double
+
+  bankAccount_holderName string
+  bankAccount_number string
+  bankAccount_bankCode string
+  bankAccount_napasCode string
+  bankAccount_bankName string
+
+  status string
+  pinCode string
   isLinkedBank boolean
-  ngayKichHoat datetime
-  lanCapNhatCuoi datetime
+  activatedAt datetime
+  lastUpdated datetime
   createdAt datetime
   updatedAt datetime
 }
 
 ////////////////////////////////////////////////////
-// 💳 GIAODICH
+// 💳 TRANSACTION
 ////////////////////////////////////////////////////
-Table GiaoDich {
+Table Transaction {
   _id ObjectId [pk]
   walletId ObjectId
   userId ObjectId
@@ -85,10 +87,10 @@ Table Team {
   name string
   description string
   avatar string
-  maThamChieu string
+  refCode string
   createdBy ObjectId
   membersCount int
-  viTeamId ObjectId
+  walletId ObjectId
   privacy string
   status string
   totalExpense double
@@ -151,6 +153,9 @@ Table Split {
   updatedAt datetime
 }
 
+////////////////////////////////////////////////////
+// 👤 SPLIT MEMBER
+////////////////////////////////////////////////////
 Table SplitMember {
   _id ObjectId [pk]
   splitId ObjectId
@@ -164,19 +169,19 @@ Table SplitMember {
 }
 
 ////////////////////////////////////////////////////
-// 🔗 RELATIONSHIPS
+// 🔗 RELATIONSHIPS (STANDARDIZED)
 ////////////////////////////////////////////////////
-Ref: ViTien.userId > User._id
-Ref: GiaoDich.walletId > ViTien._id
-Ref: GiaoDich.userId > User._id
-Ref: Team.createdBy > User._id
-Ref: Team.viTeamId > ViTien._id
-Ref: Member.userId > User._id
-Ref: Member.teamId > Team._id
-Ref: Expense.teamId > Team._id
-Ref: Expense.createdBy > User._id
-Ref: Expense.paidBy > Member._id
-Ref: Split.expenseId > Expense._id
-Ref: Split.teamId > Team._id
-Ref: SplitMember.splitId > Split._id
-Ref: SplitMember.memberId > Member._id
+Ref: Wallet.userId > User._id                      // 1 user → 1 wallet
+Ref: Transaction.walletId > Wallet._id             // 1 wallet → many transactions
+Ref: Transaction.userId > User._id                 // 1 user → many transactions
+Ref: Team.createdBy > User._id                     // 1 user → many teams created
+Ref: Team.walletId > Wallet._id                    // 1 wallet → 1 team (shared fund)
+Ref: Member.userId > User._id                      // 1 user → many member roles
+Ref: Member.teamId > Team._id                      // 1 team → many members
+Ref: Expense.teamId > Team._id                     // 1 team → many expenses
+Ref: Expense.createdBy > User._id                  // 1 user → many created expenses
+Ref: Expense.paidBy > Member._id                   // 1 member → many paid expenses
+Ref: Split.expenseId > Expense._id                 // 1 expense → 1 split rule
+Ref: Split.teamId > Team._id                       // 1 team → many splits
+Ref: SplitMember.splitId > Split._id               // 1 split → many split members
+Ref: SplitMember.memberId > Member._id             // 1 member → many split entries

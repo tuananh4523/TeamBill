@@ -1,39 +1,102 @@
-// models/walletModel.js
 import mongoose from "mongoose";
 
 const walletSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    maThamChieu: { type: String, required: true, unique: true },
-    tenVi: { type: String, default: "Ví chính" },
-    loaiVi: { type: String, enum: ["CÁ NHÂN", "NHÓM"], default: "CÁ NHÂN" },
-
-    soDu: { type: Number, default: 0, min: 0 },
-    tongNap: { type: Number, default: 0 },
-    tongRut: { type: Number, default: 0 },
-    gioiHanRut: { type: Number, default: 50000000 },
-    gioiHanNap: { type: Number, default: 100000000 },
-
-    thongTinNganHang: {
-      chuTaiKhoan: { type: String, required: true },
-      soTaiKhoan: { type: String, required: true },
-      maNganHang: { type: String, required: true },
-      maNapas: { type: String, required: true },
-      tenNganHang: { type: String, required: true },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "userId là bắt buộc"],
     },
 
-    trangThai: {
+    refCode: {
       type: String,
-      enum: ["KÍCH_HOẠT", "KHÓA", "TẠM_DỪNG"],
-      default: "KÍCH_HOẠT",
+      required: [true, "refCode là bắt buộc"],
+      unique: true,
     },
 
-    maPIN: { type: String },
+    walletName: {
+      type: String,
+      default: "Ví chính",
+      trim: true,
+      maxlength: 100,
+    },
+
+    walletType: {
+      type: String,
+      enum: ["PERSONAL", "GROUP"],
+      default: "PERSONAL",
+    },
+
+    balance: {
+      type: Number,
+      default: 0,
+      min: [0, "Số dư không thể âm"],
+    },
+
+    totalDeposit: {
+      type: Number,
+      default: 0,
+      min: [0, "Tổng nạp không thể âm"],
+    },
+
+    totalWithdraw: {
+      type: Number,
+      default: 0,
+      min: [0, "Tổng rút không thể âm"],
+    },
+
+    withdrawLimit: {
+      type: Number,
+      default: 50000000,
+      min: 0,
+    },
+
+    depositLimit: {
+      type: Number,
+      default: 100000000,
+      min: 0,
+    },
+
+    bankAccount: {
+      holderName: {
+        type: String,
+        required: [true, "Tên chủ tài khoản là bắt buộc"],
+        trim: true,
+      },
+      number: {
+        type: String,
+        required: [true, "Số tài khoản là bắt buộc"],
+        trim: true,
+      },
+      bankCode: {
+        type: String,
+        required: [true, "Mã ngân hàng là bắt buộc"],
+      },
+      napasCode: {
+        type: String,
+        required: [true, "Mã Napas là bắt buộc"],
+      },
+      bankName: {
+        type: String,
+        required: [true, "Tên ngân hàng là bắt buộc"],
+      },
+    },
+
+    status: {
+      type: String,
+      enum: ["ACTIVE", "LOCKED", "SUSPENDED"],
+      default: "ACTIVE",
+    },
+
+    pinCode: { type: String },
+
     isLinkedBank: { type: Boolean, default: true },
-    ngayKichHoat: { type: Date, default: Date.now },
-    lanCapNhatCuoi: { type: Date, default: Date.now },
+
+    activatedAt: { type: Date, default: Date.now },
+
+    lastUpdated: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
 
-export default mongoose.models.ViTien || mongoose.model("ViTien", walletSchema);
+export default mongoose.models.Wallet || mongoose.model("Wallet", walletSchema);

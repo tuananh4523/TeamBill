@@ -10,7 +10,7 @@ import Footer from "@/components/Footer";
 import clsx from "clsx";
 import { useState } from "react";
 import { ConfigProvider } from "antd";
-import viVN from 'antd/es/locale/vi_VN';
+import viVN from "antd/es/locale/vi_VN";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({
@@ -34,9 +34,9 @@ export default function RootLayout({
           "antialiased h-full bg-[#f7fbff] text-gray-800"
         )}
       >
-        <ConfigProvider locale={viVN}>
-          <AuthProvider>
-            <Providers>
+        <Providers>
+          <ConfigProvider locale={viVN}>
+            <AuthProvider>
               <div className="flex h-screen overflow-hidden">
                 {/* ===== SIDEBAR ===== */}
                 <aside
@@ -89,9 +89,9 @@ export default function RootLayout({
                   </footer>
                 </div>
               </div>
-            </Providers>
-          </AuthProvider>
-        </ConfigProvider>
+            </AuthProvider>
+          </ConfigProvider>
+        </Providers>
       </body>
     </html>
   );

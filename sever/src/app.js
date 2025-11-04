@@ -2,13 +2,13 @@ import express from 'express'
 import { connectDB } from './config/DB.js'
 import 'dotenv/config'
 import cors from 'cors'
-import usersRouter from './routers/component/usersRouter.js'
-import memberRouter from './routers/component/memberRouter.js'
-import expenseRouter from './routers/component/expenseRouter.js'
-import splitRouter from './routers/component/splitRouter.js'
-import teamRouter from './routers/component/teamRouter.js'
-import walletRouter from './routers/component/walletRouter.js'
-import dashboardRouter from "./routes/dashboard/index.js";
+import usersRouter from './routers/usersRouter.js'
+import memberRouter from './routers/memberRouter.js'
+import expenseRouter from './routers/expenseRouter.js'
+import splitRouter from './routers/splitRouter.js'
+import teamRouter from './routers/teamRouter.js'
+import walletRouter from './routers/walletRouter.js'
+// import dashboardRouter from "./routes/dashboard/index.js";
 
 const app = express()
 

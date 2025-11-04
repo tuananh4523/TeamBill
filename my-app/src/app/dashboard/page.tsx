@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, JSX } from "react";
+import { JSX, useMemo, useState } from "react";
 import {
   Row,
   Col,
@@ -30,16 +30,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useAuth } from "@/context/AuthContext";
-import {
-  getWalletInfo,
-  getWalletTransactions,
-  getTeams,
-  getExpenses,
-  IWalletInfo,
-  WalletTransaction,
-  ITeam,
-  IExpense,
-} from "@/lib/api";
+import { useWalletInfo, useWalletTransactions } from "@/lib/api/useWallet";
+import { useTeams } from "@/lib/api/useTeam";
+import { useExpenses } from "@/lib/api/useExpense";
 
 const { Title, Text } = Typography;
 
@@ -51,76 +44,75 @@ interface ChartData {
 
 export default function DashboardPage(): JSX.Element {
   const { user, loading: authLoading } = useAuth();
-
-  const [wallet, setWallet] = useState<IWalletInfo | null>(null);
-  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
-  const [teams, setTeams] = useState<ITeam[]>([]);
-  const [expenses, setExpenses] = useState<IExpense[]>([]);
-  const [chartData, setChartData] = useState<ChartData[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
   const [showBalance, setShowBalance] = useState<boolean>(true);
 
-  /* ================== TẠO DỮ LIỆU BIỂU ĐỒ ================== */
-  const buildChartData = (expenseList: IExpense[]): ChartData[] => {
+  /* ================== FETCH DATA VIA HOOKS ================== */
+  const {
+    data: wallet,
+    isLoading: walletLoading,
+    refetch: refetchWallet,
+  } = useWalletInfo(user?._id || "");
+
+  const {
+    data: txRes,
+    isLoading: txLoading,
+    refetch: refetchTx,
+  } = useWalletTransactions({ userId: user?._id });
+
+  const {
+    data: teams,
+    isLoading: teamLoading,
+    refetch: refetchTeams,
+  } = useTeams();
+
+  const {
+    data: expenses,
+    isLoading: expenseLoading,
+    refetch: refetchExpenses,
+  } = useExpenses();
+
+  const loading = walletLoading || txLoading || teamLoading || expenseLoading;
+
+  const transactions = txRes?.data ?? [];
+
+  /* ================== BUILD CHART DATA ================== */
+  const chartData: ChartData[] = useMemo(() => {
+    if (!expenses) return [];
     const now = new Date();
     const result: ChartData[] = [];
 
     for (let i = 0; i < 12; i++) {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const label = `T${monthDate.getMonth() + 1}`;
-      const filtered = expenseList.filter(
+      const filtered = expenses.filter(
         (e) => new Date(e.date).getMonth() === monthDate.getMonth()
       );
       const totalExpense = filtered.reduce((sum, e) => sum + e.amount, 0);
       result.unshift({
         month: label,
-        income: totalExpense * 1.3, // mô phỏng thu nhập
+        income: totalExpense * 1.3,
         expense: totalExpense,
       });
     }
 
     return result;
+  }, [expenses]);
+
+  /* ================== REFRESH ALL ================== */
+  const handleReload = (): void => {
+    Promise.all([
+      refetchWallet(),
+      refetchTx(),
+      refetchTeams(),
+      refetchExpenses(),
+    ])
+      .then(() => message.success("Đã làm mới dữ liệu Dashboard"))
+      .catch(() =>
+        message.error("Không thể làm mới dữ liệu, vui lòng thử lại.")
+      );
   };
 
-  /* ================== FETCH DỮ LIỆU DASHBOARD ================== */
-  const fetchDashboard = async (): Promise<void> => {
-    if (!user?._id || !user.token) {
-      message.warning("Không tìm thấy người dùng hoặc token đăng nhập.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const [walletRes, transRes, teamRes, expenseRes] = await Promise.all([
-        getWalletInfo(user._id),
-        getWalletTransactions(user._id),
-        getTeams(),
-        getExpenses(),
-      ]);
-
-      setWallet(walletRes.data);
-      setTransactions(transRes.data.data ?? []);
-      setTeams(teamRes.data);
-      setExpenses(expenseRes.data);
-      setChartData(buildChartData(expenseRes.data));
-    } catch (error) {
-      console.error("[Dashboard] Lỗi khi tải dữ liệu:", error);
-      message.error("Không thể tải dữ liệu Dashboard. Vui lòng thử lại sau.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /* ================== TỰ ĐỘNG GỌI SAU KHI LOGIN ================== */
-  useEffect(() => {
-    if (user && user._id && user.token) {
-      console.log("[Dashboard] User ID:", user._id);
-      console.log("[Dashboard] Token:", user.token?.slice(0, 20) + "...");
-      void fetchDashboard();
-    }
-  }, [user?._id, user?.token]);
-
-  /* ================== UI TRẠNG THÁI ================== */
+  /* ================== UI STATE ================== */
   if (authLoading)
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -135,13 +127,11 @@ export default function DashboardPage(): JSX.Element {
       </div>
     );
 
-  const handleReload = (): void => void fetchDashboard();
-
-  /* ================== HIỂN THỊ GIAO DIỆN ================== */
+  /* ================== UI RENDER ================== */
   return (
     <Spin spinning={loading}>
       <div className="min-h-screen p-6">
-        {/* ========== HEADER ========== */}
+        {/* HEADER */}
         <Row justify="space-between" align="middle" className="mb-5">
           <Title level={3} className="!mb-0">
             Bảng điều khiển
@@ -160,8 +150,8 @@ export default function DashboardPage(): JSX.Element {
           </Space>
         </Row>
 
-        {/* ========== THẺ VÍ ========== */}
         <Row gutter={[16, 16]}>
+          {/* WALLET CARD */}
           <Col xs={24}>
             <Card
               className="rounded-2xl border-0 shadow-sm text-white"
@@ -179,7 +169,7 @@ export default function DashboardPage(): JSX.Element {
                         : "***000 ₫"
                       : "—"}
                   </Title>
-                  {wallet && wallet.thongTinNganHang_tenNganHang && (
+                  {wallet?.thongTinNganHang_tenNganHang && (
                     <Text className="text-white/80 text-xs">
                       {wallet.thongTinNganHang_tenNganHang} •{" "}
                       {wallet.thongTinNganHang_soTaiKhoan}
@@ -201,7 +191,7 @@ export default function DashboardPage(): JSX.Element {
             </Card>
           </Col>
 
-          {/* ========== THỐNG KÊ NHANH ========== */}
+          {/* QUICK STATS */}
           <Col xs={24} lg={8}>
             <Card
               className="rounded-2xl shadow-sm text-center"
@@ -219,7 +209,7 @@ export default function DashboardPage(): JSX.Element {
             >
               <Title level={3}>
                 {expenses
-                  .reduce((sum, e) => sum + e.amount, 0)
+                  ?.reduce((sum, e) => sum + e.amount, 0)
                   .toLocaleString()}{" "}
                 ₫
               </Title>
@@ -232,12 +222,12 @@ export default function DashboardPage(): JSX.Element {
               className="rounded-2xl shadow-sm text-center"
               title="Nhóm đang tham gia"
             >
-              <Title level={3}>{teams.length}</Title>
+              <Title level={3}>{teams?.length ?? 0}</Title>
               <Text type="secondary">Nhóm Team Bill của bạn</Text>
             </Card>
           </Col>
 
-          {/* ========== BIỂU ĐỒ ========== */}
+          {/* CHART */}
           <Col xs={24}>
             <Card
               className="rounded-2xl shadow-sm bg-white"
@@ -284,7 +274,7 @@ export default function DashboardPage(): JSX.Element {
             </Card>
           </Col>
 
-          {/* ========== GIAO DỊCH GẦN ĐÂY ========== */}
+          {/* RECENT TRANSACTIONS */}
           <Col xs={24}>
             <Card
               className="rounded-2xl shadow-sm"
@@ -297,7 +287,7 @@ export default function DashboardPage(): JSX.Element {
                 />
               }
             >
-              {transactions.length === 0 ? (
+              {!transactions.length ? (
                 <Empty description="Không có giao dịch" />
               ) : (
                 <Table

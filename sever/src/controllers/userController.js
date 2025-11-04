@@ -1,8 +1,8 @@
 // controllers/userController.js
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "../models/userModel.js";
-import { userSchema } from "../schema/userSchema.js";
+import User from "../../models/userModel.js";
+import { userSchema } from "../../schema/userSchema.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "teamBill_secret";
 

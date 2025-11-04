@@ -14,9 +14,42 @@ export const teamSchema = Joi.object({
     "string.max": `"description" không được vượt quá {#limit} ký tự`,
   }),
 
-  // Danh sách memberId (nếu có)
-  members: Joi.array().items(Joi.string().hex().length(24)).messages({
-    "string.hex": `"members" phải chứa ObjectId hợp lệ`,
-    "string.length": `"members" phải có 24 ký tự`,
+  avatar: Joi.string().uri().allow("", null).messages({
+    "string.uri": `"avatar" phải là URL hợp lệ`,
+  }),
+
+  refCode: Joi.string().trim().max(50).allow("", null).messages({
+    "string.max": `"refCode" không được vượt quá {#limit} ký tự`,
+  }),
+
+  createdBy: Joi.string().hex().length(24).allow(null, "").messages({
+    "string.hex": `"createdBy" phải là ObjectId hợp lệ`,
+  }),
+
+  membersCount: Joi.number().min(0).default(1).messages({
+    "number.min": `"membersCount" không thể âm`,
+  }),
+
+  walletId: Joi.string().hex().length(24).allow(null, "").messages({
+    "string.hex": `"walletId" phải là ObjectId hợp lệ`,
+  }),
+
+  privacy: Joi.string().valid("public", "private").default("private").messages({
+    "any.only": `"privacy" chỉ nhận giá trị 'public' hoặc 'private'`,
+  }),
+
+  status: Joi.string()
+    .valid("active", "inactive", "archived")
+    .default("active")
+    .messages({
+      "any.only": `"status" chỉ nhận giá trị 'active', 'inactive' hoặc 'archived'`,
+    }),
+
+  totalExpense: Joi.number().min(0).default(0).messages({
+    "number.min": `"totalExpense" không thể âm`,
+  }),
+
+  lastActivity: Joi.date().default(Date.now).messages({
+    "date.base": `"lastActivity" phải là kiểu ngày hợp lệ`,
   }),
 });
