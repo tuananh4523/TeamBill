@@ -5,21 +5,30 @@ import {
   getTeamById,
   updateTeam,
   deleteTeam,
-  getTeamMembers,
 } from "../controllers/teamController.js";
 import { validate } from "../middleware/validate.js";
 import { teamSchema } from "../schema/teamSchema.js";
 
 const teamRouter = express.Router();
 
-// CRUD chính
-teamRouter.post("/teams", validate(teamSchema), createTeam);
+// Danh sách tất cả nhóm
+// GET /api/teams
 teamRouter.get("/teams", getTeams);
-teamRouter.get("/teams/:id", getTeamById);
-teamRouter.put("/teams/:id", validate(teamSchema), updateTeam);
-teamRouter.delete("/teams/:id", deleteTeam);
 
-// Lấy danh sách thành viên của 1 nhóm
-teamRouter.get("/teams/:id/members", getTeamMembers);
+// Chi tiết nhóm
+// GET /api/teams/:id
+teamRouter.get("/teams/:id", getTeamById);
+
+// Tạo nhóm mới
+// POST /api/teams
+teamRouter.post("/teams", validate(teamSchema), createTeam);
+
+// Cập nhật nhóm
+// PUT /api/teams/:id
+teamRouter.put("/teams/:id", validate(teamSchema), updateTeam);
+
+// Xóa nhóm
+// DELETE /api/teams/:id
+teamRouter.delete("/teams/:id", deleteTeam);
 
 export default teamRouter;

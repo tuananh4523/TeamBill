@@ -1,143 +1,132 @@
 import Team from "../models/teamModel.js";
-import Member from "../models/memberModel.js";
+import { teamSchema } from "../schema/teamSchema.js";
 
-/* ================== TẠO TEAM MỚI ================== */
+/* ============================================================
+   TẠO NHÓM MỚI
+============================================================ */
 export const createTeam = async (req, res) => {
   try {
-    const { name, description, avatar, privacy, status } = req.body;
-
-    if (!name || name.trim().length < 2) {
-      return res
-        .status(400)
-        .json({ error: "Tên nhóm là bắt buộc và phải có ít nhất 2 ký tự" });
+    const { error } = teamSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        message: "Dữ liệu không hợp lệ",
+        details: error.details.map((m) => m.message),
+      });
     }
 
-    const createdBy = req.user?._id || null;
+    const { name, description, avatar, createdBy, walletId, privacy } = req.body;
 
-    // Tạo mã nhóm duy nhất (refCode)
+    // Tạo mã refCode ngẫu nhiên
     const refCode = `TEAM-${Date.now().toString(36).toUpperCase()}`;
 
     const team = await Team.create({
-      name: name.trim(),
-      description: description?.trim() || "",
+      name,
+      description,
       avatar: avatar || "",
       refCode,
       createdBy,
       membersCount: 1,
-      walletId: null,
+      walletId: walletId || null,
       privacy: privacy || "private",
-      status: status || "active",
+      status: "active",
       totalExpense: 0,
       lastActivity: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
     res.status(201).json({
       message: "Tạo nhóm thành công",
       team,
     });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi tạo nhóm",
+      error: err.message,
+    });
   }
 };
 
-/* ================== LẤY DANH SÁCH TEAM ================== */
+/* ============================================================
+   LẤY DANH SÁCH NHÓM
+============================================================ */
 export const getTeams = async (req, res) => {
   try {
-    const filter = {};
-    if (req.query.createdBy) filter.createdBy = req.query.createdBy;
-    if (req.query.status) filter.status = req.query.status;
-    if (req.query.privacy) filter.privacy = req.query.privacy;
-
-    const teams = await Team.find(filter)
-      .populate("createdBy", "fullName email username avatar")
-      .populate("walletId", "walletName balance status")
-      .select(
-        "_id name description avatar refCode createdBy membersCount totalExpense privacy status createdAt updatedAt"
-      )
-      .sort({ createdAt: -1 });
-
+    const teams = await Team.find().sort({ createdAt: -1 });
     res.status(200).json(teams);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi lấy danh sách nhóm",
+      error: err.message,
+    });
   }
 };
 
-/* ================== LẤY CHI TIẾT TEAM ================== */
+/* ============================================================
+   LẤY NHÓM THEO ID
+============================================================ */
 export const getTeamById = async (req, res) => {
   try {
-    const team = await Team.findById(req.params.id)
-      .populate("createdBy", "fullName email username avatar")
-      .populate("walletId", "walletName balance status");
-
-    if (!team) {
-      return res.status(404).json({ error: "Không tìm thấy nhóm" });
-    }
-
+    const { id } = req.params;
+    const team = await Team.findById(id);
+    if (!team) return res.status(404).json({ message: "Không tìm thấy nhóm" });
     res.status(200).json(team);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi lấy thông tin nhóm",
+      error: err.message,
+    });
   }
 };
 
-/* ================== CẬP NHẬT TEAM ================== */
+/* ============================================================
+   CẬP NHẬT NHÓM
+============================================================ */
 export const updateTeam = async (req, res) => {
   try {
-    const { name, description, avatar, privacy, status } = req.body;
+    const { id } = req.params;
+    const { error } = teamSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        message: "Dữ liệu không hợp lệ",
+        details: error.details.map((m) => m.message),
+      });
+    }
 
-    const team = await Team.findByIdAndUpdate(
-      req.params.id,
-      {
-        name,
-        description,
-        avatar,
-        privacy,
-        status,
-        lastActivity: new Date(),
-      },
-      { new: true, runValidators: true }
+    const updatedTeam = await Team.findByIdAndUpdate(
+      id,
+      { ...req.body, updatedAt: new Date() },
+      { new: true }
     );
 
-    if (!team) {
-      return res.status(404).json({ error: "Không tìm thấy nhóm" });
-    }
+    if (!updatedTeam)
+      return res.status(404).json({ message: "Không tìm thấy nhóm để cập nhật" });
 
     res.status(200).json({
       message: "Cập nhật nhóm thành công",
-      team,
+      team: updatedTeam,
     });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi cập nhật nhóm",
+      error: err.message,
+    });
   }
 };
 
-/* ================== XOÁ TEAM ================== */
+/* ============================================================
+   XÓA NHÓM
+============================================================ */
 export const deleteTeam = async (req, res) => {
   try {
-    const team = await Team.findByIdAndDelete(req.params.id);
-    if (!team) {
-      return res.status(404).json({ error: "Không tìm thấy nhóm" });
-    }
-
-    await Member.deleteMany({ teamId: req.params.id });
-
-    res.status(200).json({
-      message: "Đã xoá nhóm và toàn bộ thành viên liên quan",
-      deletedTeam: team,
+    const { id } = req.params;
+    const deleted = await Team.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ message: "Không tìm thấy nhóm để xóa" });
+    res.status(200).json({ message: "Xóa nhóm thành công" });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi xóa nhóm",
+      error: err.message,
     });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-/* ================== LẤY DANH SÁCH THÀNH VIÊN TRONG TEAM ================== */
-export const getTeamMembers = async (req, res) => {
-  try {
-    const members = await Member.find({ teamId: req.params.id })
-      .populate("userId", "fullName email username avatar")
-      .select("_id userId name email avatar role status contribution balance joinedAt createdAt");
-
-    res.status(200).json(members);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
 };

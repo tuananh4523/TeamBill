@@ -1,40 +1,34 @@
 import express from "express";
 import {
-  getMembers,
-  getMemberById,
   createMember,
+  getMembersByTeam,
+  getMemberById,
   updateMember,
   deleteMember,
-  addMemberToTeam,
 } from "../controllers/memberController.js";
 import { validate } from "../middleware/validate.js";
 import { memberSchema } from "../schema/memberSchema.js";
-// import { verifyToken } from "../middleware/authMiddleware.js";
 
 const memberRouter = express.Router();
 
-/* ================== MIDDLEWARE XÁC THỰC ================== */
-// 👉 Bỏ comment nếu muốn bảo vệ toàn bộ API
-// memberRouter.use(verifyToken);
+// Lấy danh sách thành viên theo team
+// GET /api/members/team/:teamId
+memberRouter.get("/members/team/:teamId", getMembersByTeam);
 
-/* ================== CRUD THÀNH VIÊN ================== */
-// Lấy danh sách thành viên (?teamId=... &userId=... &status=...)
-memberRouter.get("/members", getMembers);
-
-// Lấy thông tin chi tiết 1 thành viên
+// Lấy chi tiết 1 thành viên
+// GET /api/members/:id
 memberRouter.get("/members/:id", getMemberById);
 
-// Tạo mới một thành viên (thủ công hoặc dùng khi seed)
+// Thêm thành viên mới
+// POST /api/members
 memberRouter.post("/members", validate(memberSchema), createMember);
 
 // Cập nhật thông tin thành viên
+// PUT /api/members/:id
 memberRouter.put("/members/:id", validate(memberSchema), updateMember);
 
-// Xoá thành viên khỏi hệ thống
+// Xóa thành viên khỏi nhóm
+// DELETE /api/members/:id
 memberRouter.delete("/members/:id", deleteMember);
-
-/* ================== THÊM USER VÀO TEAM ================== */
-// Thêm user vào nhóm cụ thể (teamId ở params)
-memberRouter.post("/members/team/:teamId", addMemberToTeam);
 
 export default memberRouter;

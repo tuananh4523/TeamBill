@@ -1,46 +1,34 @@
 import express from "express";
 import {
   createWallet,
-  getWalletInfo,
-  getTransactions,
-  deposit,
-  withdraw,
-  createVietQR,
+  getWallets,
+  getWalletById,
+  updateWallet,
+  deleteWallet,
 } from "../controllers/walletController.js";
-import { verifyToken } from "../middleware/authMiddleware.js";
+import { validate } from "../middleware/validate.js";
+import { walletSchema } from "../schema/walletSchema.js";
 
 const walletRouter = express.Router();
 
-/* ================== MIDDLEWARE XÁC THỰC ================== */
-// 👉 Có thể comment dòng này khi test nhanh
-walletRouter.use(verifyToken);
+// Lấy danh sách ví
+// GET /api/wallets
+walletRouter.get("/wallets", getWallets);
 
-/* ================== QUẢN LÝ VÍ ================== */
+// Lấy chi tiết 1 ví
+// GET /api/wallets/:id
+walletRouter.get("/wallets/:id", getWalletById);
+
 // Tạo ví mới
-walletRouter.post("/wallet/create", createWallet);
+// POST /api/wallets
+walletRouter.post("/wallets", validate(walletSchema), createWallet);
 
-// Lấy thông tin ví (theo userId)
-walletRouter.get("/wallet/info", getWalletInfo);
+// Cập nhật ví
+// PUT /api/wallets/:id
+walletRouter.put("/wallets/:id", validate(walletSchema), updateWallet);
 
-// Lấy danh sách giao dịch
-walletRouter.get("/wallet/transactions", getTransactions);
-
-/* ================== NẠP / RÚT TIỀN ================== */
-// Nạp tiền vào ví
-walletRouter.post("/wallet/deposit", deposit);
-
-// Rút tiền khỏi ví
-walletRouter.post("/wallet/withdraw", withdraw);
-
-/* ================== TẠO MÃ QR THANH TOÁN ================== */
-// Tạo ảnh QR VietQR mock
-walletRouter.post("/wallet/qr", createVietQR);
-
-/* ================== Fallback nếu không khớp route ================== */
-walletRouter.use((req, res) => {
-  res.status(404).json({
-    message: "Không tìm thấy endpoint trong module Wallet",
-  });
-});
+// Xóa ví
+// DELETE /api/wallets/:id
+walletRouter.delete("/wallets/:id", deleteWallet);
 
 export default walletRouter;

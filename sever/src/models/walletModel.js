@@ -2,101 +2,41 @@ import mongoose from "mongoose";
 
 const walletSchema = new mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "userId là bắt buộc"],
-    },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    refCode: { type: String, unique: true, required: true },
+    walletName: { type: String, required: true, trim: true },
+    walletType: { type: String, enum: ["personal", "group"], default: "personal" },
+    balance: { type: Number, default: 0 },
+    totalDeposit: { type: Number, default: 0 },
+    totalWithdraw: { type: Number, default: 0 },
+    withdrawLimit: { type: Number, default: 0 },
+    depositLimit: { type: Number, default: 0 },
 
-    refCode: {
-      type: String,
-      required: [true, "refCode là bắt buộc"],
-      unique: true,
-    },
-
-    walletName: {
-      type: String,
-      default: "Ví chính",
-      trim: true,
-      maxlength: 100,
-    },
-
-    walletType: {
-      type: String,
-      enum: ["PERSONAL", "GROUP"],
-      default: "PERSONAL",
-    },
-
-    balance: {
-      type: Number,
-      default: 0,
-      min: [0, "Số dư không thể âm"],
-    },
-
-    totalDeposit: {
-      type: Number,
-      default: 0,
-      min: [0, "Tổng nạp không thể âm"],
-    },
-
-    totalWithdraw: {
-      type: Number,
-      default: 0,
-      min: [0, "Tổng rút không thể âm"],
-    },
-
-    withdrawLimit: {
-      type: Number,
-      default: 50000000,
-      min: 0,
-    },
-
-    depositLimit: {
-      type: Number,
-      default: 100000000,
-      min: 0,
-    },
-
-    bankAccount: {
-      holderName: {
-        type: String,
-        required: [true, "Tên chủ tài khoản là bắt buộc"],
-        trim: true,
-      },
-      number: {
-        type: String,
-        required: [true, "Số tài khoản là bắt buộc"],
-        trim: true,
-      },
-      bankCode: {
-        type: String,
-        required: [true, "Mã ngân hàng là bắt buộc"],
-      },
-      napasCode: {
-        type: String,
-        required: [true, "Mã Napas là bắt buộc"],
-      },
-      bankName: {
-        type: String,
-        required: [true, "Tên ngân hàng là bắt buộc"],
-      },
-    },
+    bankAccount_holderName: { type: String, default: "" },
+    bankAccount_number: { type: String, default: "" },
+    bankAccount_bankCode: { type: String, default: "" },
+    bankAccount_napasCode: { type: String, default: "" },
+    bankAccount_bankName: { type: String, default: "" },
 
     status: {
       type: String,
-      enum: ["ACTIVE", "LOCKED", "SUSPENDED"],
-      default: "ACTIVE",
+      enum: ["active", "inactive", "locked"],
+      default: "active",
     },
-
-    pinCode: { type: String },
-
-    isLinkedBank: { type: Boolean, default: true },
-
+    pinCode: { type: String, default: "" },
+    isLinkedBank: { type: Boolean, default: false },
     activatedAt: { type: Date, default: Date.now },
-
     lastUpdated: { type: Date, default: Date.now },
   },
-  { timestamps: true }
+  {
+    timestamps: {
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+    },
+    versionKey: false,
+    collection: "wallets",
+  }
 );
 
-export default mongoose.models.Wallet || mongoose.model("Wallet", walletSchema);
+const Wallet = mongoose.models.Wallet || mongoose.model("Wallet", walletSchema);
+export default Wallet;

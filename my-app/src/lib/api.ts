@@ -1,51 +1,53 @@
 import axios, { AxiosResponse } from "axios";
-import { message } from "antd";
 
-/* ======================== CẤU HÌNH AXIOS ======================== */
-export const API_BASE = "http://localhost:8080/api";
-
+/* ===========================================================
+   CẤU HÌNH AXIOS
+=========================================================== */
 const API = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true,
-  headers: { "Content-Type": "application/json" },
+  baseURL: "http://localhost:8080/api",
+  withCredentials: false,
 });
 
-// ✅ Tự động gắn token vào mọi request
 API.interceptors.request.use((config) => {
-  const token = localStorage.getItem("accessToken"); // Đồng bộ với login
+  const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// ✅ Xử lý lỗi chung
-API.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    const msg =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      "Lỗi hệ thống.";
-    if (error.response?.status === 401) {
-      message.error("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.");
-      localStorage.removeItem("accessToken");
-    } else {
-      message.error(msg);
-    }
-    return Promise.reject(error);
-  }
-);
+/* ===========================================================
+   HÀM CHUẨN HÓA ID (_id → id)
+=========================================================== */
+function normalizeId<T extends { _id?: string; id?: string }>(obj: T): T & { id: string } {
+  if (!obj) return obj;
+  return { ...obj, id: obj.id ?? obj._id ?? "" };
+}
 
-/* ======================== TYPES ======================== */
-// -------- USER --------
+function normalizeArray<T extends { _id?: string; id?: string }>(arr: T[]): (T & { id: string })[] {
+  return arr.map((item) => normalizeId(item));
+}
+
+/* ===========================================================
+   ENUM & KIỂU DỮ LIỆU DÙNG CHUNG
+=========================================================== */
+export type TrangThaiGD = "pending" | "completed" | "failed";
+export type LoaiGD = "deposit" | "withdraw" | "transfer" | "payment";
+export type HuongGD = "in" | "out";
+
+/* ===========================================================
+   USER API
+=========================================================== */
 export interface IUser {
-  _id: string;
+  id: string;
+  _id?: string;
   username: string;
   email: string;
-  fullName?: string;
   phone?: string;
-  role: string;
-  isVerified: boolean;
-  token?: string;
+  fullName?: string;
+  role: "admin" | "member";
+  isVerified?: boolean;
+  avatar?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface IUserLogin {
@@ -59,7 +61,6 @@ export interface IUserSignup {
   password: string;
   fullName?: string;
   phone?: string;
-  gender?: string;
 }
 
 export interface IUserResponse {
@@ -68,226 +69,390 @@ export interface IUserResponse {
   user: IUser;
 }
 
-/* ======================== USER API ======================== */
-export const signup = (data: IUserSignup): Promise<AxiosResponse<IUserResponse>> =>
-  API.post("/user/signup", data);
+export const signin = async (
+  data: IUserLogin
+): Promise<AxiosResponse<IUserResponse>> => {
+  const res = await API.post("/users/signin", data);
+  res.data.user = normalizeId(res.data.user);
+  return res;
+};
 
-export const signin = (data: IUserLogin): Promise<AxiosResponse<IUserResponse>> =>
-  API.post("/user/signin", data);
+export const signup = async (
+  data: IUserSignup
+): Promise<AxiosResponse<IUserResponse>> => {
+  const res = await API.post("/users/signup", data);
+  res.data.user = normalizeId(res.data.user);
+  return res;
+};
 
-export const getProfile = (): Promise<AxiosResponse<{ user: IUser }>> =>
-  API.get("/user/profile");
+export const getUsers = async (): Promise<AxiosResponse<IUser[]>> => {
+  const res = await API.get("/users");
+  res.data = normalizeArray(res.data);
+  return res;
+};
 
-/* ======================== WALLET TYPES ======================== */
-export type TrangThaiGD = "THANHCONG" | "CHO" | "THATBAI";
-export type LoaiGD = "NAP" | "RUT" | "CHUYEN" | "THANHTOAN";
-export type HuongGD = "CONG" | "TRU";
+export const getUserById = async (id: string): Promise<AxiosResponse<IUser>> => {
+  const res = await API.get(`/users/${id}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
 
-export interface IWalletInfo {
+export const updateUser = async (
+  id: string,
+  data: Partial<IUser>
+): Promise<AxiosResponse<{ message: string; user: IUser }>> => {
+  const res = await API.put(`/users/${id}`, data);
+  res.data.user = normalizeId(res.data.user);
+  return res;
+};
+
+export const deleteUser = (id: string): Promise<AxiosResponse<{ message: string }>> =>
+  API.delete(`/users/${id}`);
+
+/* ===========================================================
+   WALLET API
+=========================================================== */
+export interface IWallet {
+  id?: string;
   _id?: string;
-  userId?: string;
-  soDu: number;
-  maThamChieu: string;
-  thongTinNganHang_chuTaiKhoan: string;
-  thongTinNganHang_soTaiKhoan: string;
-  thongTinNganHang_maNganHang: string;
-  thongTinNganHang_maNapas?: string;
-  thongTinNganHang_tenNganHang?: string;
+  userId: string;
+  refCode?: string;
+  walletName: string;
+  walletType: "personal" | "group";
+  balance: number;
+  totalDeposit?: number;
+  totalWithdraw?: number;
+  withdrawLimit?: number;
+  depositLimit?: number;
+  bankAccount_holderName?: string;
+  bankAccount_number?: string;
+  bankAccount_bankCode?: string;
+  bankAccount_napasCode?: string;
+  bankAccount_bankName?: string;
+  pinCode?: string;
+  isLinkedBank?: boolean;
+  status: "active" | "inactive" | "locked";
+  activatedAt?: string;
+  lastUpdated?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface WalletTransaction {
-  _id: string;
+export const createWallet = async (
+  data: IWallet
+): Promise<AxiosResponse<{ message: string; wallet: IWallet }>> => {
+  const res = await API.post("/wallets", data);
+  res.data.wallet = normalizeId(res.data.wallet);
+  return res;
+};
+
+export const getWallets = async (): Promise<AxiosResponse<IWallet[]>> => {
+  const res = await API.get("/wallets");
+  res.data = normalizeArray(res.data);
+  return res;
+};
+
+export const getWalletById = async (id: string): Promise<AxiosResponse<IWallet>> => {
+  const res = await API.get(`/wallets/${id}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
+
+export const updateWallet = async (
+  id: string,
+  data: Partial<IWallet>
+): Promise<AxiosResponse<{ message: string; wallet: IWallet }>> => {
+  const res = await API.put(`/wallets/${id}`, data);
+  res.data.wallet = normalizeId(res.data.wallet);
+  return res;
+};
+
+export const deleteWallet = (id: string): Promise<AxiosResponse<{ message: string }>> =>
+  API.delete(`/wallets/${id}`);
+
+/* ===========================================================
+   TRANSACTION API
+=========================================================== */
+export interface ITransaction {
+  id?: string;
+  _id?: string;
   walletId: string;
   userId: string;
-  code: string;
-  refCode: string;
+  code?: string;
+  refCode?: string;
   type: LoaiGD;
   direction: HuongGD;
+  category?: string;
   amount: number;
   fee?: number;
+  balanceBefore?: number;
+  balanceAfter?: number;
   description?: string;
-  status: TrangThaiGD;
-  date: string;
-  confirmedAt?: string;
+  status?: TrangThaiGD;
+  deviceInfo?: string;
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-/* ======================== WALLET API ======================== */
-export const createWallet = (data: {
-  userId: string;
-  tenVi: string;
-  loaiVi: string;
-  chuTaiKhoan: string;
-  soTaiKhoan: string;
-  maNganHang: string;
-  maNapas: string;
-  tenNganHang: string;
-  gioiHanRut?: number;
-  gioiHanNap?: number;
-  maPIN?: string;
-  isLinkedBank?: boolean;
-}): Promise<AxiosResponse<{ message: string; vi: IWalletInfo }>> =>
-  API.post("/wallet/create", data);
+export const createTransaction = async (
+  data: ITransaction
+): Promise<AxiosResponse<{ message: string; transaction: ITransaction }>> => {
+  const res = await API.post("/transactions", data);
+  res.data.transaction = normalizeId(res.data.transaction);
+  return res;
+};
 
-export const getWalletInfo = (userId: string): Promise<AxiosResponse<IWalletInfo>> =>
-  API.get("/wallet/info", { params: { userId } });
+export const getTransactionsByWallet = async (
+  walletId: string
+): Promise<AxiosResponse<ITransaction[]>> => {
+  const res = await API.get(`/transactions/wallet/${walletId}`);
+  res.data = normalizeArray(res.data);
+  return res;
+};
 
-export const getWalletTransactions = (
-  userId: string
-): Promise<
-  AxiosResponse<{
-    data: WalletTransaction[];
-    pagination: { page: number; limit: number; total: number; pages: number };
-  }>
-> => API.get("/wallet/transactions", { params: { userId } });
+export const getTransactionById = async (
+  id: string
+): Promise<AxiosResponse<ITransaction>> => {
+  const res = await API.get(`/transactions/${id}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
 
-// ✅ Đồng bộ schema backend: bỏ "loai"
-export const depositWallet = (data: {
-  userId: string;
-  soTien: number;
-  moTa?: string;
-  fee?: number;
-  deviceInfo?: string;
-  category?: string;
-}): Promise<AxiosResponse<{ message: string; balance: number }>> =>
-  API.post("/wallet/deposit", data);
+export const updateTransaction = async (
+  id: string,
+  data: Partial<ITransaction>
+): Promise<AxiosResponse<{ message: string; transaction: ITransaction }>> => {
+  const res = await API.put(`/transactions/${id}`, data);
+  res.data.transaction = normalizeId(res.data.transaction);
+  return res;
+};
 
-export const withdrawWallet = (data: {
-  userId: string;
-  soTien: number;
-  moTa?: string;
-  fee?: number;
-  deviceInfo?: string;
-  category?: string;
-}): Promise<AxiosResponse<{ message: string; balance: number }>> =>
-  API.post("/wallet/withdraw", data);
+export const deleteTransaction = (id: string): Promise<AxiosResponse<{ message: string }>> =>
+  API.delete(`/transactions/${id}`);
 
-export const taoQRVietQR = (data: {
-  userId: string;
-  amount?: number;
+/* ===========================================================
+   TEAM API
+=========================================================== */
+export interface ITeam {
+  id?: string;
+  _id?: string;
+  name: string;
   description?: string;
-}): Promise<
-  AxiosResponse<{
-    maThamChieu: string;
-    qr: { image: string; amount: number; description: string };
-    thongTinNganHang_chuTaiKhoan: string;
-    thongTinNganHang_soTaiKhoan: string;
-    thongTinNganHang_tenNganHang: string;
-  }>
-> => API.post("/wallet/qr", data);
+  avatar?: string;
+  refCode?: string;
+  createdBy: string;
+  membersCount?: number;
+  walletId?: string;
+  privacy?: "public" | "private" | "invite-only";
+  status?: "active" | "inactive" | "archived";
+  totalExpense?: number;
+  lastActivity?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
-/* ======================== TEAM API ======================== */
+export const createTeam = async (
+  data: ITeam
+): Promise<AxiosResponse<{ message: string; team: ITeam }>> => {
+  const res = await API.post("/teams", data);
+  res.data.team = normalizeId(res.data.team);
+  return res;
+};
+
+export const getTeams = async (): Promise<AxiosResponse<ITeam[]>> => {
+  const res = await API.get("/teams");
+  res.data = normalizeArray(res.data);
+  return res;
+};
+
+export const getTeamById = async (id: string): Promise<AxiosResponse<ITeam>> => {
+  const res = await API.get(`/teams/${id}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
+
+export const updateTeam = async (
+  id: string,
+  data: Partial<ITeam>
+): Promise<AxiosResponse<{ message: string; team: ITeam }>> => {
+  const res = await API.put(`/teams/${id}`, data);
+  res.data.team = normalizeId(res.data.team);
+  return res;
+};
+
+export const deleteTeam = (id: string): Promise<AxiosResponse<{ message: string }>> =>
+  API.delete(`/teams/${id}`);
+
+/* ===========================================================
+   MEMBER API
+=========================================================== */
+export enum MemberStatus {
+  Active = "active",
+  Inactive = "inactive",
+  Left = "left",
+}
 export interface IMember {
-  _id: string;
-  userId?: string;
-  teamId?: string;
+  id?: string;
+  _id?: string;
+  userId: string;
+  teamId: string;
   name: string;
   email: string;
   avatar?: string;
-  role?: string;
-  status?: string;
-}
-
-export interface ITeam {
-  _id: string;
-  name: string;
-  members: IMember[];
+  role?: "owner" | "admin" | "member";
+  status?: MemberStatus ;
+  contribution?: number;
+  balance?: number;
+  joinedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export const getTeams = (): Promise<AxiosResponse<ITeam[]>> => API.get("/teams");
+export const createMember = async (
+  data: IMember
+): Promise<AxiosResponse<{ message: string; member: IMember }>> => {
+  const res = await API.post("/members", data);
+  res.data.member = normalizeId(res.data.member);
+  return res;
+};
 
-/* ======================== EXPENSE API ======================== */
+export const getMembersByTeam = async (
+  teamId: string
+): Promise<AxiosResponse<IMember[]>> => {
+  const res = await API.get(`/members/team/${teamId}`);
+  res.data = normalizeArray(res.data);
+  return res;
+};
+
+export const getMemberById = async (id: string): Promise<AxiosResponse<IMember>> => {
+  const res = await API.get(`/members/${id}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
+
+export const updateMember = async (
+  id: string,
+  data: Partial<IMember>
+): Promise<AxiosResponse<{ message: string; member: IMember }>> => {
+  const res = await API.put(`/members/${id}`, data);
+  res.data.member = normalizeId(res.data.member);
+  return res;
+};
+
+export const deleteMember = (id: string): Promise<AxiosResponse<{ message: string }>> =>
+  API.delete(`/members/${id}`);
+
+/* ===========================================================
+   EXPENSE API
+=========================================================== */
 export interface IExpense {
-  _id: string;
+  id?: string;
+  _id?: string;
+  teamId: string;
+  createdBy: string;
   title: string;
   amount: number;
-  category: string;
-  status: "CHỜ" | "HOÀN TẤT";
-  person: string;
-  date: string;
+  category?: string;
+  description?: string;
+  status?: "pending" | "completed" | "cancelled";
+  paidBy?: string;
+  splitMethod?: "equal" | "percentage" | "custom";
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export const getExpenses = (): Promise<AxiosResponse<IExpense[]>> =>
-  API.get("/expenses");
+export const createExpense = async (
+  data: IExpense
+): Promise<AxiosResponse<{ message: string; expense: IExpense }>> => {
+  const res = await API.post("/expenses", data);
+  res.data.expense = normalizeId(res.data.expense);
+  return res;
+};
 
-/* ======================== SPLIT API ======================== */
-export interface ISplitMember {
-  _id?: string;
-  splitId?: string;
-  memberId?: string;
-  name: string;
-  paid: number;
-  owed: number;
-  balance: number;
-}
+export const getExpensesByTeam = async (
+  teamId: string
+): Promise<AxiosResponse<IExpense[]>> => {
+  const res = await API.get(`/expenses/team/${teamId}`);
+  res.data = normalizeArray(res.data);
+  return res;
+};
 
+export const getExpenseById = async (id: string): Promise<AxiosResponse<IExpense>> => {
+  const res = await API.get(`/expenses/${id}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
+
+export const updateExpense = async (
+  id: string,
+  data: Partial<IExpense>
+): Promise<AxiosResponse<{ message: string; expense: IExpense }>> => {
+  const res = await API.put(`/expenses/${id}`, data);
+  res.data.expense = normalizeId(res.data.expense);
+  return res;
+};
+
+export const deleteExpense = (id: string): Promise<AxiosResponse<{ message: string }>> =>
+  API.delete(`/expenses/${id}`);
+
+/* ===========================================================
+   SPLIT API
+=========================================================== */
 export interface ISplit {
-  _id: string;
+  id?: string;
+  _id?: string;
   expenseId: string;
   teamId: string;
   total: number;
-  method: "EQUAL" | "PERCENTAGE" | "CUSTOM";
-  currency: string;
-  date: string;
-  members?: ISplitMember[];
+  method: "equal" | "percentage" | "custom";
+  currency?: string;
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export const getSplits = (): Promise<AxiosResponse<ISplit[]>> =>
-  API.get("/splits");
+export const createSplit = async (
+  data: ISplit
+): Promise<AxiosResponse<{ message: string; split: ISplit }>> => {
+  const res = await API.post("/splits", data);
+  res.data.split = normalizeId(res.data.split);
+  return res;
+};
 
-export const createSplit = (
-  data: Pick<ISplit, "expenseId" | "teamId" | "total" | "method" | "currency"> & {
-    members: ISplitMember[];
-  }
-): Promise<
-  AxiosResponse<{ message: string; split: ISplit; members: ISplitMember[] }>
-> => API.post("/splits", data);
+export const getSplitsByTeam = async (
+  teamId: string
+): Promise<AxiosResponse<ISplit[]>> => {
+  const res = await API.get(`/splits/team/${teamId}`);
+  res.data = normalizeArray(res.data);
+  return res;
+};
 
-/* ======================== DASHBOARD API ======================== */
-export interface IMonthlyTransaction {
-  _id: number; // tháng (1–12)
-  income: number;
-  expense: number;
-}
+export const getSplitsByExpense = async (
+  expenseId: string
+): Promise<AxiosResponse<ISplit>> => {
+  const res = await API.get(`/splits/expense/${expenseId}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
 
-export interface ITopSpender {
-  _id: string; // tên người
-  totalPaid: number;
-  totalOwed: number;
-  netBalance: number;
-}
+export const getSplitById = async (id: string): Promise<AxiosResponse<ISplit>> => {
+  const res = await API.get(`/splits/${id}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
 
-export interface IDashboardSummary {
-  totalUsers: number;
-  totalTeams: number;
-  totalMembers: number;
-  totalExpenses: number;
-  totalSplits: number;
-  wallet: {
-    totalBalance: number;
-    totalNap: number;
-    totalRut: number;
-  };
-  expenses: {
-    totalAmount: number;
-  };
-  topSpenders: ITopSpender[];
-  monthlyTransactions: IMonthlyTransaction[];
-}
+export const updateSplit = async (
+  id: string,
+  data: Partial<ISplit>
+): Promise<AxiosResponse<{ message: string; split: ISplit }>> => {
+  const res = await API.put(`/splits/${id}`, data);
+  res.data.split = normalizeId(res.data.split);
+  return res;
+};
 
-/**
- * Lấy dữ liệu tổng hợp cho Dashboard
- * - Tổng user, team, member, expense, split
- * - Tổng số dư ví, tổng chi tiêu
- * - Top người chi nhiều nhất
- * - Biểu đồ thu / chi theo tháng
- */
-export const getDashboardSummary = (): Promise<
-  AxiosResponse<IDashboardSummary>
-> => API.get("/dashboard/summary");
-
+export const deleteSplit = (id: string): Promise<AxiosResponse<{ message: string }>> =>
+  API.delete(`/splits/${id}`);
 
 export default API;

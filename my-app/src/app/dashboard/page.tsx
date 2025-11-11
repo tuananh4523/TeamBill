@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useMemo, useState } from "react";
+import React, { JSX } from "react";
 import {
   Row,
   Col,
@@ -19,100 +19,31 @@ import {
   EyeOutlined,
   ReloadOutlined,
   SettingOutlined,
-  ExpandOutlined,
 } from "@ant-design/icons";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip as ChartTooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { useAuth } from "@/context/AuthContext";
-import { useWalletInfo, useWalletTransactions } from "@/lib/api/useWallet";
-import { useTeams } from "@/lib/api/useTeam";
-import { useExpenses } from "@/lib/api/useExpense";
+import { useDashboardSummary } from "@/lib/hook";
+import type { IDashboardSummary } from "@/lib/hook";
 
 const { Title, Text } = Typography;
 
-interface ChartData {
-  month: string;
-  income: number;
-  expense: number;
-}
-
+/* ============================================================
+   COMPONENT DASHBOARD PAGE
+============================================================ */
 export default function DashboardPage(): JSX.Element {
   const { user, loading: authLoading } = useAuth();
-  const [showBalance, setShowBalance] = useState<boolean>(true);
+  const { data, isLoading, refetch } = useDashboardSummary();
+  const [showBalance, setShowBalance] = React.useState(true);
 
-  /* ================== FETCH DATA VIA HOOKS ================== */
-  const {
-    data: wallet,
-    isLoading: walletLoading,
-    refetch: refetchWallet,
-  } = useWalletInfo(user?._id || "");
-
-  const {
-    data: txRes,
-    isLoading: txLoading,
-    refetch: refetchTx,
-  } = useWalletTransactions({ userId: user?._id });
-
-  const {
-    data: teams,
-    isLoading: teamLoading,
-    refetch: refetchTeams,
-  } = useTeams();
-
-  const {
-    data: expenses,
-    isLoading: expenseLoading,
-    refetch: refetchExpenses,
-  } = useExpenses();
-
-  const loading = walletLoading || txLoading || teamLoading || expenseLoading;
-
-  const transactions = txRes?.data ?? [];
-
-  /* ================== BUILD CHART DATA ================== */
-  const chartData: ChartData[] = useMemo(() => {
-    if (!expenses) return [];
-    const now = new Date();
-    const result: ChartData[] = [];
-
-    for (let i = 0; i < 12; i++) {
-      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const label = `T${monthDate.getMonth() + 1}`;
-      const filtered = expenses.filter(
-        (e) => new Date(e.date).getMonth() === monthDate.getMonth()
-      );
-      const totalExpense = filtered.reduce((sum, e) => sum + e.amount, 0);
-      result.unshift({
-        month: label,
-        income: totalExpense * 1.3,
-        expense: totalExpense,
-      });
+  const handleReload = async (): Promise<void> => {
+    try {
+      await refetch();
+      message.success("Đã làm mới dữ liệu Dashboard.");
+    } catch {
+      message.error("Không thể làm mới dữ liệu Dashboard.");
     }
-
-    return result;
-  }, [expenses]);
-
-  /* ================== REFRESH ALL ================== */
-  const handleReload = (): void => {
-    Promise.all([
-      refetchWallet(),
-      refetchTx(),
-      refetchTeams(),
-      refetchExpenses(),
-    ])
-      .then(() => message.success("Đã làm mới dữ liệu Dashboard"))
-      .catch(() =>
-        message.error("Không thể làm mới dữ liệu, vui lòng thử lại.")
-      );
   };
 
-  /* ================== UI STATE ================== */
+  // ======================== TRẠNG THÁI AUTH ========================
   if (authLoading)
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -127,13 +58,20 @@ export default function DashboardPage(): JSX.Element {
       </div>
     );
 
-  /* ================== UI RENDER ================== */
+  // ======================== DỮ LIỆU TỪ HOOK ========================
+  const summary: IDashboardSummary | undefined = data;
+  const wallet = summary?.wallet;
+  const transactions = summary?.transactions ?? [];
+  const totalExpenses = summary?.totalExpenses ?? 0;
+  const joinedTeams = summary?.joinedTeams ?? { total: 0, list: [] };
+
+  // ======================== GIAO DIỆN CHÍNH ========================
   return (
-    <Spin spinning={loading}>
+    <Spin spinning={isLoading}>
       <div className="min-h-screen p-6">
-        {/* HEADER */}
+        {/* Header */}
         <Row justify="space-between" align="middle" className="mb-5">
-          <Title level={3} className="!mb-0">
+          <Title level={3} className="!ml-1">
             Bảng điều khiển
           </Title>
           <Space size="middle">
@@ -151,7 +89,7 @@ export default function DashboardPage(): JSX.Element {
         </Row>
 
         <Row gutter={[16, 16]}>
-          {/* WALLET CARD */}
+          {/* Thông tin ví */}
           <Col xs={24}>
             <Card
               className="rounded-2xl border-0 shadow-sm text-white"
@@ -163,16 +101,16 @@ export default function DashboardPage(): JSX.Element {
                 <Col>
                   <Text className="text-sm text-white/90">Số dư ví</Text>
                   <Title level={3} style={{ color: "white", margin: 0 }}>
-                    {wallet && typeof wallet.soDu === "number"
+                    {wallet
                       ? showBalance
-                        ? `${wallet.soDu.toLocaleString()} ₫`
-                        : "***000 ₫"
+                        ? `${(wallet.balance ?? 0).toLocaleString()} ₫`
+                        : "*** ₫"
                       : "—"}
                   </Title>
-                  {wallet?.thongTinNganHang_tenNganHang && (
+                  {wallet && (
                     <Text className="text-white/80 text-xs">
-                      {wallet.thongTinNganHang_tenNganHang} •{" "}
-                      {wallet.thongTinNganHang_soTaiKhoan}
+                      {wallet.bankAccount_holderName || "----"} •{" "}
+                      {wallet.refCode}
                     </Text>
                   )}
                 </Col>
@@ -191,11 +129,11 @@ export default function DashboardPage(): JSX.Element {
             </Card>
           </Col>
 
-          {/* QUICK STATS */}
+          {/* Thống kê nhanh */}
           <Col xs={24} lg={8}>
             <Card
               className="rounded-2xl shadow-sm text-center"
-              title="Tổng giao dịch"
+              title="Giao dịch"
             >
               <Title level={3}>{transactions.length}</Title>
               <Text type="secondary">Giao dịch đã thực hiện</Text>
@@ -207,74 +145,22 @@ export default function DashboardPage(): JSX.Element {
               className="rounded-2xl shadow-sm text-center"
               title="Tổng chi tiêu"
             >
-              <Title level={3}>
-                {expenses
-                  ?.reduce((sum, e) => sum + e.amount, 0)
-                  .toLocaleString()}{" "}
-                ₫
-              </Title>
-              <Text type="secondary">Tổng chi trong 12 tháng</Text>
+              <Title level={3}>{totalExpenses.toLocaleString()} ₫</Title>
+              <Text type="secondary">Chi tiêu đã ghi nhận</Text>
             </Card>
           </Col>
 
           <Col xs={24} lg={8}>
             <Card
               className="rounded-2xl shadow-sm text-center"
-              title="Nhóm đang tham gia"
+              title="Nhóm tham gia"
             >
-              <Title level={3}>{teams?.length ?? 0}</Title>
+              <Title level={3}>{joinedTeams.total}</Title>
               <Text type="secondary">Nhóm Team Bill của bạn</Text>
             </Card>
           </Col>
 
-          {/* CHART */}
-          <Col xs={24}>
-            <Card
-              className="rounded-2xl shadow-sm bg-white"
-              title={
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-800">
-                    Biểu đồ thu chi
-                  </span>
-                  <Text type="secondary">(12 tháng gần đây)</Text>
-                </div>
-              }
-              extra={<ExpandOutlined />}
-            >
-              {chartData.length === 0 ? (
-                <Empty description="Không có dữ liệu" />
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={chartData}>
-                    <XAxis dataKey="month" />
-                    <YAxis
-                      tickFormatter={(v) => `${v / 1_000_000}tr`}
-                      stroke="#94a3b8"
-                    />
-                    <ChartTooltip
-                      formatter={(v: number) => `${v.toLocaleString()} ₫`}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="income"
-                      name="Thu"
-                      stroke="#22c55e"
-                      strokeWidth={2}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="expense"
-                      name="Chi"
-                      stroke="#ef4444"
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </Card>
-          </Col>
-
-          {/* RECENT TRANSACTIONS */}
+          {/* Giao dịch gần đây */}
           <Col xs={24}>
             <Card
               className="rounded-2xl shadow-sm"
@@ -290,11 +176,7 @@ export default function DashboardPage(): JSX.Element {
               {!transactions.length ? (
                 <Empty description="Không có giao dịch" />
               ) : (
-                <Table
-                  dataSource={transactions.slice(0, 5)}
-                  pagination={false}
-                  rowKey="_id"
-                >
+                <Table dataSource={transactions} pagination={false} rowKey="id">
                   <Table.Column
                     title="Mã GD"
                     dataIndex="code"
@@ -306,8 +188,8 @@ export default function DashboardPage(): JSX.Element {
                     dataIndex="type"
                     key="type"
                     render={(type: string) => (
-                      <Text type={type === "NAP" ? "success" : "danger"}>
-                        {type}
+                      <Text type={type === "deposit" ? "success" : "danger"}>
+                        {type.toUpperCase()}
                       </Text>
                     )}
                   />

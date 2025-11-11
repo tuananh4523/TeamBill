@@ -1,185 +1,145 @@
-import Split, { SplitMember } from "../models/splitModel.js";
-import Expense from "../models/expenseModel.js";
+import Split from "../models/splitModel.js";
+import { splitSchema } from "../schema/splitSchema.js";
 
-/* ================== TẠO SPLIT MỚI ================== */
+/* ============================================================
+   TẠO SPLIT MỚI
+============================================================ */
 export const createSplit = async (req, res) => {
   try {
-    const { expenseId, teamId, total, method, currency, members } = req.body;
-
-    if (!expenseId || !teamId || typeof total !== "number" || !Array.isArray(members)) {
-      return res
-        .status(400)
-        .json({ message: "Thiếu thông tin bắt buộc hoặc dữ liệu không hợp lệ" });
+    const { error } = splitSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        message: "Dữ liệu không hợp lệ",
+        details: error.details.map((m) => m.message),
+      });
     }
 
-    // Kiểm tra chi tiêu tồn tại
-    const expense = await Expense.findById(expenseId);
-    if (!expense) {
-      return res.status(404).json({ message: "Không tìm thấy khoản chi tiêu (Expense)" });
-    }
+    const { expenseId, teamId, total, method, currency, date } = req.body;
 
-    // Tạo Split chính
     const split = await Split.create({
       expenseId,
       teamId,
       total,
-      method: method || "EQUAL",
-      currency: currency || "VND",
-      date: new Date(),
+      method,
+      currency,
+      date: date ? new Date(date) : new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
-
-    // Chuẩn bị danh sách thành viên chia tiền
-    const membersData = members.map((m) => ({
-      splitId: split._id,
-      memberId: m.memberId,
-      name: m.name?.trim(),
-      paid: Number(m.paid) || 0,
-      owed: Number(m.owed) || 0,
-      balance: (Number(m.paid) || 0) - (Number(m.owed) || 0),
-    }));
-
-    await SplitMember.insertMany(membersData);
 
     res.status(201).json({
-      message: "Tạo chia tiền thành công",
+      message: "Tạo split thành công",
       split,
-      members: membersData,
     });
-  } catch (error) {
+  } catch (err) {
     res.status(500).json({
-      message: "Lỗi khi tạo chia tiền",
-      error: error.message,
+      message: "Lỗi server khi tạo split",
+      error: err.message,
     });
   }
 };
 
-/* ================== LẤY DANH SÁCH SPLIT ================== */
-export const getSplits = async (req, res) => {
+/* ============================================================
+   LẤY DANH SÁCH SPLIT THEO TEAM
+============================================================ */
+export const getSplitsByTeam = async (req, res) => {
   try {
-    const filter = {};
-    if (req.query.teamId) filter.teamId = req.query.teamId;
-    if (req.query.expenseId) filter.expenseId = req.query.expenseId;
+    const { teamId } = req.params;
+    if (!teamId) return res.status(400).json({ message: "Thiếu mã nhóm (teamId)" });
 
-    const splits = await Split.find(filter)
-      .populate("expenseId", "title amount category")
-      .populate("teamId", "name")
-      .sort({ createdAt: -1 });
-
-    // Kèm danh sách thành viên mỗi split
-    const result = await Promise.all(
-      splits.map(async (split) => {
-        const members = await SplitMember.find({ splitId: split._id });
-        return { ...split.toObject(), members };
-      })
-    );
-
-    res.status(200).json(result);
-  } catch (error) {
+    const splits = await Split.find({ teamId }).sort({ date: -1 });
+    res.status(200).json(splits);
+  } catch (err) {
     res.status(500).json({
-      message: "Lỗi khi lấy danh sách chia tiền",
-      error: error.message,
+      message: "Lỗi server khi lấy danh sách split",
+      error: err.message,
     });
   }
 };
 
-/* ================== LẤY CHI TIẾT 1 SPLIT ================== */
+/* ============================================================
+   LẤY SPLIT THEO EXPENSE
+============================================================ */
+export const getSplitByExpense = async (req, res) => {
+  try {
+    const { expenseId } = req.params;
+    const split = await Split.findOne({ expenseId });
+    if (!split)
+      return res.status(404).json({ message: "Không tìm thấy split của expense này" });
+    res.status(200).json(split);
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi lấy split theo expenseId",
+      error: err.message,
+    });
+  }
+};
+
+/* ============================================================
+   LẤY CHI TIẾT SPLIT
+============================================================ */
 export const getSplitById = async (req, res) => {
   try {
-    const split = await Split.findById(req.params.id)
-      .populate("expenseId", "title amount category")
-      .populate("teamId", "name");
-
-    if (!split) {
-      return res.status(404).json({ message: "Không tìm thấy chia tiền" });
-    }
-
-    const members = await SplitMember.find({ splitId: split._id });
-    res.status(200).json({ ...split.toObject(), members });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    const { id } = req.params;
+    const split = await Split.findById(id);
+    if (!split) return res.status(404).json({ message: "Không tìm thấy split" });
+    res.status(200).json(split);
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi lấy chi tiết split",
+      error: err.message,
+    });
   }
 };
 
-/* ================== CẬP NHẬT SPLIT ================== */
+/* ============================================================
+   CẬP NHẬT SPLIT
+============================================================ */
 export const updateSplit = async (req, res) => {
   try {
-    const { total, method, currency, members } = req.body;
+    const { id } = req.params;
+    const { error } = splitSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        message: "Dữ liệu không hợp lệ",
+        details: error.details.map((m) => m.message),
+      });
+    }
 
-    const split = await Split.findByIdAndUpdate(
-      req.params.id,
-      { total, method, currency },
-      { new: true, runValidators: true }
+    const updatedSplit = await Split.findByIdAndUpdate(
+      id,
+      { ...req.body, updatedAt: new Date() },
+      { new: true }
     );
 
-    if (!split) {
-      return res.status(404).json({ message: "Không tìm thấy chia tiền" });
-    }
-
-    // Xóa danh sách cũ và thêm lại
-    await SplitMember.deleteMany({ splitId: split._id });
-
-    const newMembers = (members || []).map((m) => ({
-      splitId: split._id,
-      memberId: m.memberId,
-      name: m.name?.trim(),
-      paid: Number(m.paid) || 0,
-      owed: Number(m.owed) || 0,
-      balance: (Number(m.paid) || 0) - (Number(m.owed) || 0),
-    }));
-
-    await SplitMember.insertMany(newMembers);
+    if (!updatedSplit)
+      return res.status(404).json({ message: "Không tìm thấy split để cập nhật" });
 
     res.status(200).json({
-      message: "Cập nhật chia tiền thành công",
-      split,
-      members: newMembers,
+      message: "Cập nhật split thành công",
+      split: updatedSplit,
     });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi cập nhật split",
+      error: err.message,
+    });
   }
 };
 
-/* ================== XOÁ SPLIT ================== */
+/* ============================================================
+   XÓA SPLIT
+============================================================ */
 export const deleteSplit = async (req, res) => {
   try {
-    const split = await Split.findByIdAndDelete(req.params.id);
-    if (!split) {
-      return res.status(404).json({ message: "Không tìm thấy chia tiền" });
-    }
-
-    await SplitMember.deleteMany({ splitId: split._id });
-    res.status(200).json({ message: "Xoá chia tiền thành công" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-/* ================== TỔNG HỢP SỐ DƯ (SUMMARY) ================== */
-export const getSplitsSummary = async (req, res) => {
-  try {
-    const match = {};
-    if (req.query.teamId) match.teamId = req.query.teamId;
-
-    const summary = await SplitMember.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: "$memberId",
-          name: { $first: "$name" },
-          totalPaid: { $sum: "$paid" },
-          totalOwed: { $sum: "$owed" },
-          netBalance: { $sum: "$balance" },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { netBalance: -1 } },
-    ]);
-
-    res.status(200).json(summary);
-  } catch (error) {
+    const { id } = req.params;
+    const deleted = await Split.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ message: "Không tìm thấy split để xóa" });
+    res.status(200).json({ message: "Xóa split thành công" });
+  } catch (err) {
     res.status(500).json({
-      message: "Lỗi khi tổng hợp chia tiền",
-      error: error.message,
+      message: "Lỗi server khi xóa split",
+      error: err.message,
     });
   }
 };

@@ -1,53 +1,25 @@
 import Joi from "joi";
 
 export const memberSchema = Joi.object({
-  userId: Joi.string().hex().length(24).required().messages({
-    "string.hex": `"userId" phải là ObjectId hợp lệ`,
+  userId: Joi.string().required().messages({
     "any.required": `"userId" là bắt buộc`,
   }),
-
-  teamId: Joi.string().hex().length(24).required().messages({
-    "string.hex": `"teamId" phải là ObjectId hợp lệ`,
+  teamId: Joi.string().required().messages({
     "any.required": `"teamId" là bắt buộc`,
   }),
-
   name: Joi.string().trim().min(2).max(100).required().messages({
-    "string.min": `"name" phải có ít nhất {#limit} ký tự`,
-    "string.max": `"name" không được vượt quá {#limit} ký tự`,
+    "string.empty": `"name" không được để trống`,
     "any.required": `"name" là bắt buộc`,
   }),
-
-  email: Joi.string()
-    .trim()
-    .email({ tlds: { allow: false } })
-    .allow("", null)
-    .messages({
-      "string.email": `"email" phải là địa chỉ hợp lệ`,
-    }),
-
-  avatar: Joi.string().uri().allow("", null).messages({
-    "string.uri": `"avatar" phải là URL hợp lệ`,
+  email: Joi.string().email().required().messages({
+    "string.email": `"email" không hợp lệ`,
+    "any.required": `"email" là bắt buộc`,
   }),
-
-  role: Joi.string().valid("admin", "member", "viewer").default("member").messages({
-    "any.only": `"role" chỉ nhận giá trị 'admin', 'member' hoặc 'viewer'`,
-  }),
-
-  status: Joi.string()
-    .valid("active", "inactive", "pending")
-    .default("active")
-    .messages({
-      "any.only": `"status" chỉ nhận giá trị 'active', 'inactive' hoặc 'pending'`,
-    }),
-
-  contribution: Joi.number().min(0).default(0).messages({
-    "number.min": `"contribution" không được âm`,
-  }),
-
-  balance: Joi.number().default(0).messages({
-    "number.base": `"balance" phải là số`,
-  }),
-
-  joinedAt: Joi.date().default(Date.now),
+  avatar: Joi.string().allow(""),
+  role: Joi.string().valid("owner", "admin", "member").default("member"),
+  status: Joi.string().valid("active", "inactive", "left").default("active"),
+  joinedAt: Joi.date().allow(null),
   leftAt: Joi.date().allow(null),
+  contribution: Joi.number().min(0).default(0),
+  balance: Joi.number().default(0),
 });

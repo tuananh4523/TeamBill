@@ -2,75 +2,27 @@ import mongoose from "mongoose";
 
 const memberSchema = new mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "userId là bắt buộc"],
-    },
-
-    teamId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Team",
-      required: [true, "teamId là bắt buộc"],
-    },
-
-    name: {
-      type: String,
-      trim: true,
-      required: [true, "Tên thành viên là bắt buộc"],
-      minlength: [2, "Tên thành viên phải có ít nhất 2 ký tự"],
-      maxlength: [100, "Tên thành viên không được vượt quá 100 ký tự"],
-    },
-
-    email: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      match: [/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/, "Email không hợp lệ"],
-    },
-
-    avatar: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    role: {
-      type: String,
-      enum: ["admin", "member", "viewer"],
-      default: "member",
-    },
-
-    status: {
-      type: String,
-      enum: ["active", "inactive", "pending"],
-      default: "active",
-    },
-
-    contribution: {
-      type: Number,
-      default: 0,
-      min: [0, "Giá trị đóng góp không được âm"],
-    },
-
-    balance: {
-      type: Number,
-      default: 0,
-    },
-
-    joinedAt: {
-      type: Date,
-      default: Date.now,
-    },
-
-    leftAt: {
-      type: Date,
-      default: null,
-    },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, trim: true, lowercase: true },
+    avatar: { type: String, default: "" },
+    role: { type: String, enum: ["owner", "admin", "member"], default: "member" },
+    status: { type: String, enum: ["active", "inactive", "left"], default: "active" },
+    joinedAt: { type: Date, default: Date.now },
+    leftAt: { type: Date },
+    contribution: { type: Number, default: 0 },
+    balance: { type: Number, default: 0 },
   },
   {
-    timestamps: true, // Tự động thêm createdAt và updatedAt
+    timestamps: {
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+    },
+    collection: "members",
+    versionKey: false,
   }
 );
 
-export default mongoose.model("Member", memberSchema);
+const Member = mongoose.models.Member || mongoose.model("Member", memberSchema);
+export default Member;

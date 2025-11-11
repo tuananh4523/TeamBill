@@ -1,81 +1,42 @@
 import mongoose from "mongoose";
 
-const walletSchema = new mongoose.Schema(
+const transactionSchema = new mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "userId là bắt buộc"],
-    },
-
-    refCode: {
+    walletId: { type: mongoose.Schema.Types.ObjectId, ref: "Wallet", required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    code: { type: String, required: true, unique: true },
+    refCode: { type: String, required: true },
+    type: {
       type: String,
-      required: [true, "refCode là bắt buộc"],
-      unique: true,
+      enum: ["deposit", "withdraw", "transfer", "payment"],
+      required: true,
     },
-
-    walletName: {
-      type: String,
-      default: "Ví chính",
-      trim: true,
-      maxlength: [100, "walletName không được vượt quá 100 ký tự"],
-    },
-
-    walletType: {
-      type: String,
-      enum: ["PERSONAL", "GROUP"],
-      default: "PERSONAL",
-    },
-
-    balance: {
-      type: Number,
-      default: 0,
-      min: [0, "Số dư không thể âm"],
-    },
-
-    totalDeposit: {
-      type: Number,
-      default: 0,
-    },
-
-    totalWithdraw: {
-      type: Number,
-      default: 0,
-    },
-
-    withdrawLimit: {
-      type: Number,
-      default: 50000000,
-    },
-
-    depositLimit: {
-      type: Number,
-      default: 100000000,
-    },
-
-    bankAccount: {
-      holderName: { type: String, required: true, trim: true },
-      number: { type: String, required: true, trim: true },
-      bankCode: { type: String, required: true },
-      napasCode: { type: String, required: true },
-      bankName: { type: String, required: true },
-    },
-
+    direction: { type: String, enum: ["in", "out"], required: true },
+    category: { type: String, trim: true, default: "" },
+    amount: { type: Number, required: true, min: 0 },
+    fee: { type: Number, default: 0 },
+    balanceBefore: { type: Number, required: true },
+    balanceAfter: { type: Number, required: true },
+    description: { type: String, trim: true, default: "" },
     status: {
       type: String,
-      enum: ["ACTIVE", "LOCKED", "SUSPENDED"],
-      default: "ACTIVE",
+      enum: ["pending", "completed", "failed"],
+      default: "completed",
     },
-
-    pinCode: { type: String },
-
-    isLinkedBank: { type: Boolean, default: true },
-
-    activatedAt: { type: Date, default: Date.now },
-
-    lastUpdated: { type: Date, default: Date.now },
+    deviceInfo: { type: String, trim: true, default: "" },
+    date: { type: Date, default: Date.now },
+    confirmedAt: { type: Date, default: Date.now },
   },
-  { timestamps: true }
+  {
+    timestamps: {
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+    },
+    versionKey: false,
+    collection: "transactions",
+  }
 );
 
-export default mongoose.models.Wallet || mongoose.model("Wallet", walletSchema);
+const Transaction =
+  mongoose.models.Transaction || mongoose.model("Transaction", transactionSchema);
+export default Transaction;

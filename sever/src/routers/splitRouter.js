@@ -1,40 +1,39 @@
 import express from "express";
 import {
   createSplit,
-  getSplits,
+  getSplitsByTeam,
+  getSplitByExpense,
   getSplitById,
   updateSplit,
   deleteSplit,
-  getSplitsSummary,
 } from "../controllers/splitController.js";
 import { validate } from "../middleware/validate.js";
 import { splitSchema } from "../schema/splitSchema.js";
-// import { verifyToken } from "../middleware/authMiddleware.js";
 
 const splitRouter = express.Router();
 
-/* ================== MIDDLEWARE XÁC THỰC ================== */
-// 👉 Bỏ comment để bật xác thực toàn bộ API
-// splitRouter.use(verifyToken);
+// Lấy tất cả split theo team
+// GET /api/splits/team/:teamId
+splitRouter.get("/splits/team/:teamId", getSplitsByTeam);
 
-/* ================== CRUD CHIA TIỀN ================== */
-// Tạo Split mới cùng danh sách SplitMember
-splitRouter.post("/splits", validate(splitSchema), createSplit);
+// Lấy split theo expenseId
+// GET /api/splits/expense/:expenseId
+splitRouter.get("/splits/expense/:expenseId", getSplitByExpense);
 
-// Lấy danh sách Split (?teamId=... &expenseId=...)
-splitRouter.get("/splits", getSplits);
-
-// Lấy chi tiết 1 Split (kèm SplitMember)
+// Lấy chi tiết 1 split
+// GET /api/splits/:id
 splitRouter.get("/splits/:id", getSplitById);
 
-// Cập nhật Split và danh sách SplitMember
+// Tạo split mới
+// POST /api/splits
+splitRouter.post("/splits", validate(splitSchema), createSplit);
+
+// Cập nhật split
+// PUT /api/splits/:id
 splitRouter.put("/splits/:id", validate(splitSchema), updateSplit);
 
-// Xóa Split và toàn bộ SplitMember liên quan
+// Xóa split
+// DELETE /api/splits/:id
 splitRouter.delete("/splits/:id", deleteSplit);
-
-/* ================== TỔNG HỢP CHIA TIỀN ================== */
-// Tổng hợp số dư, đã chi, đã nợ của từng thành viên
-splitRouter.get("/splits/summary", getSplitsSummary);
 
 export default splitRouter;
