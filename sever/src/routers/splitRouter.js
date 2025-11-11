@@ -1,26 +1,39 @@
-// routes/splitRouter.js
 import express from "express";
 import {
   createSplit,
-  getSplits,
+  getSplitsByTeam,
+  getSplitByExpense,
   getSplitById,
   updateSplit,
   deleteSplit,
-  getSplitsSummary,
 } from "../controllers/splitController.js";
 import { validate } from "../middleware/validate.js";
 import { splitSchema } from "../schema/splitSchema.js";
 
 const splitRouter = express.Router();
 
-// CRUD
-splitRouter.post("/splits", validate(splitSchema), createSplit);
-splitRouter.get("/splits", getSplits);
-splitRouter.get("/splits/:id", getSplitById);
-splitRouter.put("/splits/:id", validate(splitSchema), updateSplit);
-splitRouter.delete("/splits/:id", deleteSplit);
+// Lấy tất cả split theo team
+// GET /api/splits/team/:teamId
+splitRouter.get("/splits/team/:teamId", getSplitsByTeam);
 
-// Summary
-splitRouter.get("/splits/summary", getSplitsSummary);
+// Lấy split theo expenseId
+// GET /api/splits/expense/:expenseId
+splitRouter.get("/splits/expense/:expenseId", getSplitByExpense);
+
+// Lấy chi tiết 1 split
+// GET /api/splits/:id
+splitRouter.get("/splits/:id", getSplitById);
+
+// Tạo split mới
+// POST /api/splits
+splitRouter.post("/splits", validate(splitSchema), createSplit);
+
+// Cập nhật split
+// PUT /api/splits/:id
+splitRouter.put("/splits/:id", validate(splitSchema), updateSplit);
+
+// Xóa split
+// DELETE /api/splits/:id
+splitRouter.delete("/splits/:id", deleteSplit);
 
 export default splitRouter;

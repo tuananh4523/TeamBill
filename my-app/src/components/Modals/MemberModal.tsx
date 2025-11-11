@@ -2,16 +2,15 @@
 
 import { Modal, Form, Input, Select } from "antd";
 import type { FormInstance } from "antd/es/form";
-import { MemberStatus, Member } from "@/app/teams/page";
+import { IMember, MemberStatus } from "@/lib/api";
 
 type MemberModalProps = {
   open: boolean;
   onCancel: () => void;
-  onSave: (values: Omit<Member, "_id">) => Promise<void> | void;
+  onSave: (values: Omit<IMember, "_id" | "id">) => Promise<void> | void;
   form: FormInstance;
-  editingMember?: Member | null;   // cho phép null hoặc undefined
+  editingMember?: IMember | null; // cho phép null hoặc undefined
 };
-
 
 export default function MemberModal({
   open,
@@ -40,6 +39,7 @@ export default function MemberModal({
         >
           <Input />
         </Form.Item>
+
         <Form.Item
           name="email"
           label="Email"
@@ -47,13 +47,20 @@ export default function MemberModal({
         >
           <Input />
         </Form.Item>
+
         <Form.Item name="role" label="Vai trò">
           <Input />
         </Form.Item>
-        <Form.Item name="status" label="Trạng thái" initialValue={MemberStatus.Active}>
+
+        <Form.Item
+          name="status"
+          label="Trạng thái"
+          initialValue={MemberStatus.Active}
+        >
           <Select>
             <Select.Option value={MemberStatus.Active}>Hoạt động</Select.Option>
             <Select.Option value={MemberStatus.Inactive}>Ngưng hoạt động</Select.Option>
+            <Select.Option value={MemberStatus.Left}>Đã rời nhóm</Select.Option>
           </Select>
         </Form.Item>
       </Form>

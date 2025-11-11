@@ -1,39 +1,42 @@
-// models/walletModel.js
 import mongoose from "mongoose";
 
 const walletSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    maThamChieu: { type: String, required: true, unique: true },
-    tenVi: { type: String, default: "Ví chính" },
-    loaiVi: { type: String, enum: ["CÁ NHÂN", "NHÓM"], default: "CÁ NHÂN" },
+    refCode: { type: String, unique: true, required: true },
+    walletName: { type: String, required: true, trim: true },
+    walletType: { type: String, enum: ["personal", "group"], default: "personal" },
+    balance: { type: Number, default: 0 },
+    totalDeposit: { type: Number, default: 0 },
+    totalWithdraw: { type: Number, default: 0 },
+    withdrawLimit: { type: Number, default: 0 },
+    depositLimit: { type: Number, default: 0 },
 
-    soDu: { type: Number, default: 0, min: 0 },
-    tongNap: { type: Number, default: 0 },
-    tongRut: { type: Number, default: 0 },
-    gioiHanRut: { type: Number, default: 50000000 },
-    gioiHanNap: { type: Number, default: 100000000 },
+    bankAccount_holderName: { type: String, default: "" },
+    bankAccount_number: { type: String, default: "" },
+    bankAccount_bankCode: { type: String, default: "" },
+    bankAccount_napasCode: { type: String, default: "" },
+    bankAccount_bankName: { type: String, default: "" },
 
-    thongTinNganHang: {
-      chuTaiKhoan: { type: String, required: true },
-      soTaiKhoan: { type: String, required: true },
-      maNganHang: { type: String, required: true },
-      maNapas: { type: String, required: true },
-      tenNganHang: { type: String, required: true },
-    },
-
-    trangThai: {
+    status: {
       type: String,
-      enum: ["KÍCH_HOẠT", "KHÓA", "TẠM_DỪNG"],
-      default: "KÍCH_HOẠT",
+      enum: ["active", "inactive", "locked"],
+      default: "active",
     },
-
-    maPIN: { type: String },
-    isLinkedBank: { type: Boolean, default: true },
-    ngayKichHoat: { type: Date, default: Date.now },
-    lanCapNhatCuoi: { type: Date, default: Date.now },
+    pinCode: { type: String, default: "" },
+    isLinkedBank: { type: Boolean, default: false },
+    activatedAt: { type: Date, default: Date.now },
+    lastUpdated: { type: Date, default: Date.now },
   },
-  { timestamps: true }
+  {
+    timestamps: {
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+    },
+    versionKey: false,
+    collection: "wallets",
+  }
 );
 
-export default mongoose.models.ViTien || mongoose.model("ViTien", walletSchema);
+const Wallet = mongoose.models.Wallet || mongoose.model("Wallet", walletSchema);
+export default Wallet;

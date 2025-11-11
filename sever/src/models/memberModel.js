@@ -1,39 +1,28 @@
-// // models/memberModel.js
-// import mongoose from "mongoose";
-
-// const memberSchema = new mongoose.Schema({
-//   name: {
-//     type: String,
-//     required: true,
-//     trim: true,
-//   },
-//   email: {
-//     type: String,
-//     required: true,
-//     unique: true,
-//   },
-//   age: {
-//     type: Number,
-//     default: null,
-//   },
-//   teamId: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: "Team", // liên kết với bảng Team
-//   },
-// }, { timestamps: true });
-
-// const Member = mongoose.model("Member", memberSchema);
-
-// export default Member;
 import mongoose from "mongoose";
 
-const memberSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true },
-  avatar: { type: String },
-  team: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
-});
+const memberSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, trim: true, lowercase: true },
+    avatar: { type: String, default: "" },
+    role: { type: String, enum: ["owner", "admin", "member"], default: "member" },
+    status: { type: String, enum: ["active", "inactive", "left"], default: "active" },
+    joinedAt: { type: Date, default: Date.now },
+    leftAt: { type: Date },
+    contribution: { type: Number, default: 0 },
+    balance: { type: Number, default: 0 },
+  },
+  {
+    timestamps: {
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+    },
+    collection: "members",
+    versionKey: false,
+  }
+);
 
-const Member = mongoose.model("Member", memberSchema);
+const Member = mongoose.models.Member || mongoose.model("Member", memberSchema);
 export default Member;
-

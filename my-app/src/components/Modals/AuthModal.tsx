@@ -52,8 +52,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       const url = isLogin
-        ? `${API_BASE}/user/signin`
-        : `${API_BASE}/user/signup`;
+        ? `${API_BASE}/users/signin`
+        : `${API_BASE}/users/signup`;
 
       const payload = isLogin
         ? { username, password }

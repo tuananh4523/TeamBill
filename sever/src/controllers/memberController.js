@@ -1,94 +1,139 @@
-// controllers/memberController.js
 import Member from "../models/memberModel.js";
-import User from "../models/userModel.js";
+import { memberSchema } from "../schema/memberSchema.js";
 
-// Lấy danh sách tất cả member
-export const getMembers = async (req, res) => {
-  try {
-    const members = await Member.find();
-    res.status(200).json(members);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Lấy chi tiết 1 member theo id
-export const getMemberById = async (req, res) => {
-  try {
-    const member = await Member.findById(req.params.id);
-    if (!member) return res.status(404).json({ message: "Member not found" });
-    res.status(200).json(member);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Thêm member mới
+/* ============================================================
+   TẠO THÀNH VIÊN MỚI
+============================================================ */
 export const createMember = async (req, res) => {
   try {
-    const newMember = new Member(req.body);
-    const savedMember = await newMember.save();
-    res.status(201).json(savedMember);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-};
-
-// Cập nhật member
-export const updateMember = async (req, res) => {
-  try {
-    const updatedMember = await Member.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-    if (!updatedMember) return res.status(404).json({ message: "Member not found" });
-    res.status(200).json(updatedMember);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-};
-
-// Xóa member
-export const deleteMember = async (req, res) => {
-  try {
-    const deleted = await Member.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Member not found" });
-    res.status(200).json({ message: "Member deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const addMemberToTeam = async (req, res) => {
-  try {
-    const { teamId } = req.params;
-    const { userId, role, status } = req.body;
-
-    const exist = await Member.findOne({ teamId, userId });
-    if (exist) {
-      return res.status(400).json({ message: "Người dùng đã có trong nhóm" });
+    const { error } = memberSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        message: "Dữ liệu không hợp lệ",
+        details: error.details.map((m) => m.message),
+      });
     }
 
-    const user = await User.findById(userId).select("username email");
-    if (!user) return res.status(404).json({ message: "User không tồn tại" });
+    const { userId, teamId, name, email, avatar, role, status, contribution, balance } =
+      req.body;
 
-    const newMember = await Member.create({
-      teamId,
+    // Kiểm tra trùng email trong cùng team
+    const existMember = await Member.findOne({ teamId, email });
+    if (existMember)
+      return res.status(400).json({ message: "Thành viên đã tồn tại trong nhóm" });
+
+    const member = await Member.create({
       userId,
-      role,
-      status: status || "Active",
+      teamId,
+      name,
+      email,
+      avatar: avatar || "",
+      role: role || "member",
+      status: status || "active",
+      joinedAt: new Date(),
+      contribution: contribution || 0,
+      balance: balance || 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
     res.status(201).json({
-      _id: newMember._id,
-      teamId: newMember.teamId,
-      name: user.username,
-      email: user.email,
-      role: newMember.role,
-      status: newMember.status,
+      message: "Thêm thành viên thành công",
+      member,
     });
   } catch (err) {
-    res.status(500).json({ message: "Lỗi server", error: err.message });
+    res.status(500).json({
+      message: "Lỗi server khi tạo thành viên",
+      error: err.message,
+    });
+  }
+};
+
+/* ============================================================
+   LẤY DANH SÁCH THÀNH VIÊN THEO TEAM
+============================================================ */
+export const getMembersByTeam = async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    if (!teamId) return res.status(400).json({ message: "Thiếu mã nhóm (teamId)" });
+
+    const members = await Member.find({ teamId }).sort({ joinedAt: 1 });
+    res.status(200).json(members);
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi lấy danh sách thành viên",
+      error: err.message,
+    });
+  }
+};
+
+/* ============================================================
+   XEM CHI TIẾT MỘT THÀNH VIÊN
+============================================================ */
+export const getMemberById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const member = await Member.findById(id);
+    if (!member) return res.status(404).json({ message: "Không tìm thấy thành viên" });
+    res.status(200).json(member);
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi lấy thông tin thành viên",
+      error: err.message,
+    });
+  }
+};
+
+/* ============================================================
+   CẬP NHẬT THÀNH VIÊN
+============================================================ */
+export const updateMember = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = memberSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        message: "Dữ liệu không hợp lệ",
+        details: error.details.map((m) => m.message),
+      });
+    }
+
+    const updatedMember = await Member.findByIdAndUpdate(
+      id,
+      { ...req.body, updatedAt: new Date() },
+      { new: true }
+    );
+
+    if (!updatedMember)
+      return res.status(404).json({ message: "Không tìm thấy thành viên để cập nhật" });
+
+    res.status(200).json({
+      message: "Cập nhật thành viên thành công",
+      member: updatedMember,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi cập nhật thành viên",
+      error: err.message,
+    });
+  }
+};
+
+/* ============================================================
+   XÓA THÀNH VIÊN
+============================================================ */
+export const deleteMember = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Member.findByIdAndDelete(id);
+    if (!deleted)
+      return res.status(404).json({ message: "Không tìm thấy thành viên để xóa" });
+
+    res.status(200).json({ message: "Xóa thành viên thành công" });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi xóa thành viên",
+      error: err.message,
+    });
   }
 };

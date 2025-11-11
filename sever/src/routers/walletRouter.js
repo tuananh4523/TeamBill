@@ -1,29 +1,34 @@
-// routes/walletRouter.js
 import express from "express";
 import {
   createWallet,
-  getWalletInfo,
-  getTransactions,
-  napTien,
-  rutTien,
-  taoQRVietQR,
+  getWallets,
+  getWalletById,
+  updateWallet,
+  deleteWallet,
 } from "../controllers/walletController.js";
-import { verifyToken } from "../middleware/authMiddleware.js";
+import { validate } from "../middleware/validate.js";
+import { walletSchema } from "../schema/walletSchema.js";
 
-const router = express.Router();
+const walletRouter = express.Router();
 
-router.use(verifyToken);
+// Lấy danh sách ví
+// GET /api/wallets
+walletRouter.get("/wallets", getWallets);
 
-router.post("/wallet/create", createWallet);
-router.get("/wallet/info", getWalletInfo);
-router.get("/wallet/transactions", getTransactions);
-router.post("/wallet/deposit", napTien);
-router.post("/wallet/withdraw", rutTien);
-router.post("/wallet/qr", taoQRVietQR);
+// Lấy chi tiết 1 ví
+// GET /api/wallets/:id
+walletRouter.get("/wallets/:id", getWalletById);
 
-// Fallback nếu route không tồn tại
-router.use((req, res) => {
-  res.status(404).json({ message: "Không tìm thấy endpoint trong module Wallet" });
-});
+// Tạo ví mới
+// POST /api/wallets
+walletRouter.post("/wallets", validate(walletSchema), createWallet);
 
-export default router;
+// Cập nhật ví
+// PUT /api/wallets/:id
+walletRouter.put("/wallets/:id", validate(walletSchema), updateWallet);
+
+// Xóa ví
+// DELETE /api/wallets/:id
+walletRouter.delete("/wallets/:id", deleteWallet);
+
+export default walletRouter;

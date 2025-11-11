@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { JSX } from "react";
 import {
   Row,
   Col,
@@ -8,110 +8,42 @@ import {
   Typography,
   Button,
   Tooltip,
-  message,
-  Select,
   Space,
   Spin,
+  Table,
   Empty,
+  message,
 } from "antd";
 import {
   EyeInvisibleOutlined,
   EyeOutlined,
   ReloadOutlined,
   SettingOutlined,
-  ExpandOutlined,
 } from "@ant-design/icons";
-import axios from "axios";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip as ReTooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { useAuth } from "@/context/AuthContext";
+import { useDashboardSummary } from "@/lib/hook";
+import type { IDashboardSummary } from "@/lib/hook";
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
-const API_BASE = "http://localhost:8080/api";
+/* ============================================================
+   COMPONENT DASHBOARD PAGE
+============================================================ */
+export default function DashboardPage(): JSX.Element {
+  const { user, loading: authLoading } = useAuth();
+  const { data, isLoading, refetch } = useDashboardSummary();
+  const [showBalance, setShowBalance] = React.useState(true);
 
-interface WalletInfo {
-  balance: number;
-  refCode: string;
-  bankInfo: {
-    chuTaiKhoan: string;
-    soTaiKhoan: string;
-    maNganHang: string;
-  };
-}
-
-interface ChartData {
-  month: string;
-  income: number;
-  expense: number;
-}
-
-export default function DashboardPage() {
-  const { user, loading: authLoading } = useAuth(); //  Lấy user từ context
-
-  const [wallet, setWallet] = useState<WalletInfo | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [showBalance, setShowBalance] = useState(false);
-  const [chartData, setChartData] = useState<ChartData[]>([]);
-  const [timeRange, setTimeRange] = useState("Tháng này");
-
-useEffect(() => {
-  const fetchData = async () => {
-    if (!user) return;
+  const handleReload = async (): Promise<void> => {
     try {
-      setLoading(true);
-      const token = user.token;
-
-      const walletRes = await axios.get(`${API_BASE}/wallet/info`, {
-        params: { userId: user.id },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (walletRes.data.success) {
-        setWallet({
-          balance: walletRes.data.balance,
-          refCode: walletRes.data.refCode,
-          bankInfo: walletRes.data.bankInfo,
-        });
-      }
-
-      const chartRes = await axios.get(`${API_BASE}/expenses/summary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const sum = chartRes.data;
-      const mock = [
-        { month: "T1", income: sum.totalAmount || 0, expense: sum.count * 50000 },
-        { month: "T2", income: sum.totalAmount / 2 || 0, expense: sum.count * 70000 },
-        { month: "T3", income: sum.totalAmount / 3 || 0, expense: sum.count * 90000 },
-      ];
-      setChartData(mock);
-    } catch (err) {
-      console.error(err);
-      message.error("Không thể tải dữ liệu ví");
-    } finally {
-      setLoading(false);
+      await refetch();
+      message.success("Đã làm mới dữ liệu Dashboard.");
+    } catch {
+      message.error("Không thể làm mới dữ liệu Dashboard.");
     }
   };
 
-  if (user) fetchData();
-  else {
-    setWallet(null);
-    setChartData([]);
-  }
-}, [user]);
-
-
-  const handleReload = () => window.location.reload();
-
-  //  Nếu đang kiểm tra đăng nhập
+  // ======================== TRẠNG THÁI AUTH ========================
   if (authLoading)
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -119,59 +51,45 @@ useEffect(() => {
       </div>
     );
 
-  //  Nếu chưa đăng nhập
   if (!user)
     return (
       <div className="flex flex-col justify-center items-center min-h-screen text-gray-600">
-        <Title level={4}>Vui lòng đăng nhập để xem trang Dashboard.</Title>
+        <Title level={4}>Vui lòng đăng nhập để xem Dashboard.</Title>
       </div>
     );
 
+  // ======================== DỮ LIỆU TỪ HOOK ========================
+  const summary: IDashboardSummary | undefined = data;
+  const wallet = summary?.wallet;
+  const transactions = summary?.transactions ?? [];
+  const totalExpenses = summary?.totalExpenses ?? 0;
+  const joinedTeams = summary?.joinedTeams ?? { total: 0, list: [] };
 
+  // ======================== GIAO DIỆN CHÍNH ========================
   return (
-    <Spin spinning={loading}>
+    <Spin spinning={isLoading}>
       <div className="min-h-screen p-6">
-        {/* ================= HEADER ================= */}
+        {/* Header */}
         <Row justify="space-between" align="middle" className="mb-5">
-          <Title level={3} className="!mb-0">
-            Trang chủ
+          <Title level={3} className="!ml-1">
+            Bảng điều khiển
           </Title>
-
-          <Space size="middle" align="center">
-            <Tooltip title="Làm mới">
+          <Space size="middle">
+            <Tooltip title="Làm mới dữ liệu">
               <Button
                 shape="circle"
                 icon={<ReloadOutlined />}
                 onClick={handleReload}
               />
             </Tooltip>
-
             <Tooltip title="Cài đặt">
               <Button shape="circle" icon={<SettingOutlined />} />
             </Tooltip>
-
-            <Select
-              value={timeRange}
-              onChange={setTimeRange}
-              style={{ width: 180 }}
-              dropdownStyle={{ minWidth: 200 }}
-            >
-              <Option value="Tuần này">Tuần này</Option>
-              <Option value="Tuần trước">Tuần trước</Option>
-              <Option value="Tháng này">Tháng này</Option>
-              <Option value="Tháng trước">Tháng trước</Option>
-              <Option value="Quý này">Quý này</Option>
-              <Option value="Quý trước">Quý trước</Option>
-              <Option value="Năm nay">Năm nay</Option>
-              <Option value="Năm trước">Năm trước</Option>
-              <Option value="Tùy chọn">Tùy chọn</Option>
-            </Select>
           </Space>
         </Row>
 
-        {/* ================= THÂN TRANG ================= */}
         <Row gutter={[16, 16]}>
-          {/* Tổng số dư */}
+          {/* Thông tin ví */}
           <Col xs={24}>
             <Card
               className="rounded-2xl border-0 shadow-sm text-white"
@@ -181,25 +99,27 @@ useEffect(() => {
             >
               <Row justify="space-between" align="middle">
                 <Col>
-                  <Text className="text-sm text-white/90">Tổng số dư</Text>
+                  <Text className="text-sm text-white/90">Số dư ví</Text>
                   <Title level={3} style={{ color: "white", margin: 0 }}>
                     {wallet
                       ? showBalance
-                        ? `${wallet.balance.toLocaleString()} ₫`
-                        : "***000 ₫"
+                        ? `${(wallet.balance ?? 0).toLocaleString()} ₫`
+                        : "*** ₫"
                       : "—"}
                   </Title>
+                  {wallet && (
+                    <Text className="text-white/80 text-xs">
+                      {wallet.bankAccount_holderName || "----"} •{" "}
+                      {wallet.refCode}
+                    </Text>
+                  )}
                 </Col>
                 <Col>
                   <Tooltip title={showBalance ? "Ẩn số dư" : "Hiện số dư"}>
                     <Button
                       shape="circle"
                       icon={
-                        showBalance ? (
-                          <EyeInvisibleOutlined />
-                        ) : (
-                          <EyeOutlined />
-                        )
+                        showBalance ? <EyeInvisibleOutlined /> : <EyeOutlined />
                       }
                       onClick={() => setShowBalance(!showBalance)}
                     />
@@ -209,101 +129,83 @@ useEffect(() => {
             </Card>
           </Col>
 
-          {/* Tổng quan */}
-          <Col xs={24} lg={12}>
+          {/* Thống kê nhanh */}
+          <Col xs={24} lg={8}>
             <Card
               className="rounded-2xl shadow-sm text-center"
-              title={<span className="font-semibold">Tổng quan</span>}
-              extra={<ReloadOutlined />}
+              title="Giao dịch"
             >
-              <Empty description="Không có dữ liệu" />
+              <Title level={3}>{transactions.length}</Title>
+              <Text type="secondary">Giao dịch đã thực hiện</Text>
             </Card>
           </Col>
 
-          {/* Thu tiền */}
-          <Col xs={24} lg={12}>
+          <Col xs={24} lg={8}>
             <Card
               className="rounded-2xl shadow-sm text-center"
-              title={<span className="font-semibold">Thu tiền</span>}
-              extra={<ReloadOutlined />}
+              title="Tổng chi tiêu"
             >
-              <Empty description="Không có dữ liệu" />
+              <Title level={3}>{totalExpenses.toLocaleString()} ₫</Title>
+              <Text type="secondary">Chi tiêu đã ghi nhận</Text>
             </Card>
           </Col>
 
-          {/* Chi tiền */}
-          <Col xs={24} lg={12}>
+          <Col xs={24} lg={8}>
             <Card
               className="rounded-2xl shadow-sm text-center"
-              title={<span className="font-semibold">Chi tiền</span>}
-              extra={<ReloadOutlined />}
+              title="Nhóm tham gia"
             >
-              <Empty description="Không có dữ liệu" />
+              <Title level={3}>{joinedTeams.total}</Title>
+              <Text type="secondary">Nhóm Team Bill của bạn</Text>
             </Card>
           </Col>
 
-          {/* Ghi chép gần đây */}
-          <Col xs={24} lg={12}>
-            <Card
-              className="rounded-2xl shadow-sm text-center"
-              title={<span className="font-semibold">Ghi chép gần đây</span>}
-              extra={<ReloadOutlined />}
-            >
-              <Empty description="Không có dữ liệu" />
-            </Card>
-          </Col>
-
-          {/* Biểu đồ thu chi */}
+          {/* Giao dịch gần đây */}
           <Col xs={24}>
             <Card
-              className="rounded-2xl shadow-sm bg-white"
-              title={
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-800">
-                    Tình hình thu chi
-                  </span>
-                  <Text type="secondary">(12 tháng gần đây)</Text>
-                </div>
-              }
+              className="rounded-2xl shadow-sm"
+              title="Giao dịch gần đây"
               extra={
-                <div className="flex items-center gap-2">
-                  <ReloadOutlined />
-                  <ExpandOutlined />
-                </div>
+                <Button
+                  type="text"
+                  icon={<ReloadOutlined />}
+                  onClick={handleReload}
+                />
               }
-              style={{ backgroundColor: "#f0f8ff" }}
             >
-              {chartData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10">
-                  <Empty description="Không có dữ liệu" />
-                </div>
+              {!transactions.length ? (
+                <Empty description="Không có giao dịch" />
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={chartData}>
-                    <XAxis dataKey="month" />
-                    <YAxis
-                      tickFormatter={(v) => `${v / 1_000_000}tr`}
-                      stroke="#94a3b8"
-                    />
-                    <ReTooltip
-                      formatter={(v: number) => `${v.toLocaleString()} ₫`}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="income"
-                      name="Thu"
-                      stroke="#22c55e"
-                      strokeWidth={2}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="expense"
-                      name="Chi"
-                      stroke="#ef4444"
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <Table dataSource={transactions} pagination={false} rowKey="id">
+                  <Table.Column
+                    title="Mã GD"
+                    dataIndex="code"
+                    key="code"
+                    render={(code: string) => <Text code>{code}</Text>}
+                  />
+                  <Table.Column
+                    title="Loại"
+                    dataIndex="type"
+                    key="type"
+                    render={(type: string) => (
+                      <Text type={type === "deposit" ? "success" : "danger"}>
+                        {type.toUpperCase()}
+                      </Text>
+                    )}
+                  />
+                  <Table.Column
+                    title="Số tiền"
+                    dataIndex="amount"
+                    key="amount"
+                    render={(amount: number) => `${amount.toLocaleString()} ₫`}
+                  />
+                  <Table.Column
+                    title="Mô tả"
+                    dataIndex="description"
+                    key="description"
+                    render={(desc?: string) => desc || "—"}
+                  />
+                </Table>
               )}
             </Card>
           </Col>

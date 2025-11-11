@@ -1,32 +1,25 @@
 import Joi from "joi";
 
-// Schema khi thêm member mới
 export const memberSchema = Joi.object({
+  userId: Joi.string().required().messages({
+    "any.required": `"userId" là bắt buộc`,
+  }),
+  teamId: Joi.string().required().messages({
+    "any.required": `"teamId" là bắt buộc`,
+  }),
   name: Joi.string().trim().min(2).max(100).required().messages({
-    "string.base": `"name" phải là dạng text`,
     "string.empty": `"name" không được để trống`,
-    "string.min": `"name" phải có ít nhất {#limit} ký tự`,
-    "string.max": `"name" không được vượt quá {#limit} ký tự`,
     "any.required": `"name" là bắt buộc`,
   }),
-
-  role: Joi.string().trim().max(50).allow("").messages({
-    "string.base": `"role" phải là dạng text`,
-    "string.max": `"role" không được vượt quá {#limit} ký tự`,
-  }),
-
   email: Joi.string().email().required().messages({
     "string.email": `"email" không hợp lệ`,
     "any.required": `"email" là bắt buộc`,
   }),
-
-  status: Joi.string().valid("ACTIVE", "INACTIVE").default("ACTIVE").messages({
-    "any.only": `"status" chỉ nhận giá trị 'ACTIVE' hoặc 'INACTIVE'`,
-  }),
+  avatar: Joi.string().allow(""),
+  role: Joi.string().valid("owner", "admin", "member").default("member"),
+  status: Joi.string().valid("active", "inactive", "left").default("active"),
+  joinedAt: Joi.date().allow(null),
+  leftAt: Joi.date().allow(null),
+  contribution: Joi.number().min(0).default(0),
+  balance: Joi.number().default(0),
 });
-
-// Schema khi cập nhật member (các field optional)
-export const memberUpdateSchema = memberSchema.fork(
-  ["name", "role", "email", "status"],
-  (field) => field.optional()
-);

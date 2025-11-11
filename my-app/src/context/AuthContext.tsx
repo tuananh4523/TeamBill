@@ -11,103 +11,54 @@ import {
 import axios from "axios";
 import { message } from "antd";
 import { setCookie, getCookie, deleteCookie } from "cookies-next";
+import {
+  getUserById,
+  getWalletById,
+  getMemberById,
+  getExpenseById,
+  getSplitById,
+  getTransactionsByWallet,
+  getTeams,
+  getExpensesByTeam,
+  getMembersByTeam,
+  getSplitsByTeam,
+  IWallet,
+  ITransaction,
+  ITeam,
+  IMember,
+  IExpense,
+  ISplit,
+} from "@/lib/api";
 
-/* ================== Kiểu dữ liệu ================== */
+/* ================== KIỂU DỮ LIỆU ================== */
 export interface User {
-  _id: string;
+  id: string;
   username: string;
-  id?: string;
   email?: string;
   token?: string;
   role?: string;
 }
 
-export interface BankInfo {
-  chuTaiKhoan: string;
-  soTaiKhoan: string;
-  maNganHang: string;
-  maNapas: string;
-}
-
-export interface WalletInfo {
-  success: boolean;
-  balance: number;
-  refCode: string;
-  bankInfo: BankInfo;
-}
-
-export interface Transaction {
-  _id: string;
-  walletId: string;
-  code: string;
-  type: "NAP" | "RUT" | "CHUYEN" | "THANHTOAN";
-  direction: "CONG" | "TRU";
-  amount: number;
-  description: string;
-  status: "THANHCONG" | "CHO" | "THATBAI";
-  createdAt: string;
-}
-
-export interface Expense {
-  _id: string;
-  title: string;
-  amount: number;
-  category: string;
-  status: "CHỜ" | "HOÀN TẤT";
-  person: string;
-  date: string;
-}
-
-export interface Member {
-  _id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-  team: string;
-}
-
-export interface Team {
-  _id: string;
-  name: string;
-  members: Member[];
-}
-
-export interface SplitMember {
-  name: string;
-  paid: number;
-}
-
-export interface Split {
-  _id: string;
-  members: SplitMember[];
-  total: number;
-  date: string;
-}
-
-/* ================== Dữ liệu toàn cục ================== */
 export interface GlobalData {
-  wallet: WalletInfo | null;
-  transactions: Transaction[];
-  teams: Team[];
-  expenses: Expense[];
-  members: Member[];
-  splits: Split[];
+  wallet: IWallet | null;
+  transactions: ITransaction[];
+  teams: ITeam[];
+  members: IMember[];
+  expenses: IExpense[];
+  splits: ISplit[];
 }
 
-/* ================== Context Type ================== */
+/* ================== CONTEXT TYPE ================== */
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (userData: User) => Promise<void>;
+  login: (data: { token: string; user: User }) => Promise<void>;
   logout: () => void;
   refreshUserData: () => Promise<void>;
   globalData: GlobalData | null;
 }
 
-/* ================== Config ================== */
-const API_BASE = "http://localhost:8080/api";
-
-/* ================== Tạo Context ================== */
+/* ================== KHỞI TẠO CONTEXT ================== */
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
@@ -117,46 +68,38 @@ const AuthContext = createContext<AuthContextType>({
   globalData: null,
 });
 
-/* ================== Component chính ================== */
-export const AuthProvider = ({ children }: { children: ReactNode }): ReactElement => {
+/* ================== COMPONENT CHÍNH ================== */
+export const AuthProvider = ({
+  children,
+}: {
+  children: ReactNode;
+}): ReactElement => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [globalData, setGlobalData] = useState<GlobalData | null>(null);
 
   useEffect(() => {
     const init = async (): Promise<void> => {
       const storedUser = localStorage.getItem("user");
-      const cookieToken = getCookie("accessToken") as string | undefined;
+      const token = getCookie("accessToken") as string | undefined;
 
-      console.log("[Init] Cookie Token:", cookieToken);
-      console.log("[Init] Stored User:", storedUser);
-
-      if (storedUser && cookieToken) {
+      if (storedUser && token) {
         try {
           const parsed: User = JSON.parse(storedUser);
           const normalized: User = {
-            _id: parsed._id || parsed.id || "",
+            id: parsed.id,
             username: parsed.username,
             email: parsed.email,
-            token: cookieToken,
             role: parsed.role,
+            token,
           };
 
-          if (normalized._id && cookieToken) {
-            console.log("[Init] Đã khôi phục user:", normalized.username);
-            console.log("[Init] ID:", normalized._id);
-            setUser(normalized);
-            axios.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
-            await loadGlobalData(normalized._id);
-          } else {
-            console.warn("[Init] Không tìm thấy userId hoặc token hợp lệ.");
-            localStorage.clear();
-            deleteCookie("accessToken");
-          }
-        } catch {
-          console.error("[Init] Parse user từ localStorage thất bại!");
-          localStorage.clear();
-          deleteCookie("accessToken");
+          axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+          setUser(normalized);
+          await loadGlobalData(normalized.id);
+        } catch (err) {
+          console.error("[Auth Init] Lỗi khôi phục phiên:", err);
+          logout();
         }
       }
       setLoading(false);
@@ -165,34 +108,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }): ReactElemen
     void init();
   }, []);
 
-  const login = async (userData: User): Promise<void> => {
-    const normalized: User = {
-      ...userData,
-      _id: userData._id || userData.id || "",
-    };
+  /* ================== ĐĂNG NHẬP ================== */
+  const login = async (resData: { token: string; user: User }): Promise<void> => {
+    const { token, user: rawUser } = resData;
 
-    if (!normalized.token) {
+    if (!token) {
       message.error("Không có token trả về từ server.");
-      console.error("[Login] Server không trả token!");
       return;
     }
 
-    setCookie("accessToken", normalized.token, { maxAge: 7 * 24 * 60 * 60 });
+    const normalized: User = {
+      id: rawUser.id,
+      username: rawUser.username,
+      email: rawUser.email,
+      role: rawUser.role,
+      token,
+    };
+
+    setCookie("accessToken", token, { maxAge: 7 * 24 * 60 * 60 });
     localStorage.setItem("user", JSON.stringify(normalized));
-    localStorage.setItem("token", normalized.token);
-    axios.defaults.headers.common["Authorization"] = `Bearer ${normalized.token}`;
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
     setUser(normalized);
-
-    console.log("[Login] Token đã lưu:", normalized.token);
-    console.log("[Login] ID người dùng:", normalized._id);
-    console.log("[Login] Username:", normalized.username);
-
     message.success(`Xin chào ${normalized.username}`);
-    await loadGlobalData(normalized._id);
+
+    console.log("=== [AuthContext] Thông tin user sau khi đăng nhập ===");
+    console.table(normalized);
+
+    await loadGlobalData(normalized.id);
   };
 
+  /* ================== ĐĂNG XUẤT ================== */
   const logout = (): void => {
-    console.log("[Logout] Xóa token và user.");
     setUser(null);
     setGlobalData(null);
     localStorage.clear();
@@ -201,64 +148,137 @@ export const AuthProvider = ({ children }: { children: ReactNode }): ReactElemen
     message.info("Đã đăng xuất.");
   };
 
+  /* ================== LÀM MỚI DỮ LIỆU ================== */
   const refreshUserData = async (): Promise<void> => {
-    try {
-      const token = getCookie("accessToken") as string | undefined;
-      if (!token) {
-        console.warn("[Refresh] Không tìm thấy token, đăng xuất!");
-        return logout();
-      }
-
-      const res = await axios.get<{ user: User }>(`${API_BASE}/user/profile`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const updatedUser = res.data?.user;
-      if (updatedUser) {
-        console.log("[Refresh] Làm mới dữ liệu user:", updatedUser.username);
-        setUser(updatedUser);
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        await loadGlobalData(updatedUser._id);
-      }
-    } catch (err) {
-      console.error("[Refresh] Lỗi khi làm mới dữ liệu:", err);
-      logout();
-    }
+    if (!user?.id) return;
+    await loadGlobalData(user.id);
   };
 
+  /* ================== HÀM LOAD TOÀN BỘ DỮ LIỆU ================== */
   const loadGlobalData = async (userId: string): Promise<void> => {
     try {
-      console.log("[LoadData] Đang tải dữ liệu cho userId:", userId);
+      // 1. Lấy thông tin user
+      const userRes = await getUserById(userId);
+      const userData = userRes.data;
+      console.groupCollapsed("=== [AuthContext] THÔNG TIN USER ===");
+      console.table({
+        ID: userData.id,
+        Username: userData.username,
+        Email: userData.email,
+        Role: userData.role,
+      });
+      console.groupEnd();
 
-      const [walletRes, transRes, teamRes, expenseRes, memberRes, splitRes] =
-        await Promise.all([
-          axios.get<WalletInfo>(`${API_BASE}/wallet/info`, { params: { userId } }),
-          axios.get<{ success: boolean; transactions: Transaction[] }>(
-            `${API_BASE}/wallet/transactions`,
-            { params: { userId } }
-          ),
-          axios.get<Team[]>(`${API_BASE}/teams`),
-          axios.get<Expense[]>(`${API_BASE}/expenses`),
-          axios.get<Member[]>(`${API_BASE}/members`),
-          axios.get<Split[]>(`${API_BASE}/splits`),
+      // 2. Lấy ví người dùng (từ localStorage nếu có)
+      let walletId: string | null = null;
+      const storedWallet = localStorage.getItem("wallet");
+      if (storedWallet) {
+        try {
+          const parsedWallet = JSON.parse(storedWallet);
+          walletId = parsedWallet.id;
+        } catch {
+          console.warn("Không đọc được wallet từ localStorage");
+        }
+      }
+
+      let userWallet: IWallet | null = null;
+      if (walletId) {
+        const walletRes = await getWalletById(walletId);
+        userWallet = walletRes.data;
+        // console.groupCollapsed("=== [AuthContext] THÔNG TIN VÍ ===");
+        // console.table({
+        //   ID: userWallet.id,
+        //   Name: userWallet.walletName,
+        //   Type: userWallet.walletType,
+        //   Balance: userWallet.balance,
+        //   Bank: userWallet.bankAccount_bankName,
+        //   Number: userWallet.bankAccount_number,
+        // });
+        // console.groupEnd();
+      }
+
+      // 3. Giao dịch theo ví
+      const txRes = userWallet
+        ? await getTransactionsByWallet(userWallet.id as string)
+        : { data: [] };
+      const transactions = txRes.data;
+      // console.groupCollapsed("=== [AuthContext] GIAO DỊCH ===");
+      // console.table(transactions.slice(0, 5));
+      // console.groupEnd();
+
+      // 4. Danh sách team
+      const teamRes = await getTeams();
+      const myTeams = teamRes.data.filter((t) => t.createdBy === userId);
+      // console.groupCollapsed("=== [AuthContext] NHÓM NGƯỜI DÙNG ===");
+      // console.table(myTeams);
+      // console.groupEnd();
+
+      // 5. Chi tiêu, thành viên, chia tiền của team đầu tiên
+      let expenses: IExpense[] = [];
+      let members: IMember[] = [];
+      let splits: ISplit[] = [];
+
+      if (myTeams.length > 0) {
+        const firstTeam = myTeams[0];
+        const teamId = firstTeam.id as string;
+
+        const [expRes, memRes, splitRes] = await Promise.all([
+          getExpensesByTeam(teamId),
+          getMembersByTeam(teamId),
+          getSplitsByTeam(teamId),
         ]);
 
-      const newData: GlobalData = {
-        wallet: walletRes.data,
-        transactions: transRes.data.transactions || [],
-        teams: teamRes.data,
-        expenses: expenseRes.data,
-        members: memberRes.data,
-        splits: splitRes.data,
-      };
+        expenses = expRes.data;
+        members = memRes.data;
+        splits = splitRes.data;
 
-      console.log("[LoadData] Ví:", newData.wallet?.balance);
-      console.log("[LoadData] Số giao dịch:", newData.transactions.length);
+        // console.groupCollapsed("=== [AuthContext] CHI TIÊU / THÀNH VIÊN / SPLIT ===");
+        // console.log("Chi tiêu:", expenses.length, expenses);
+        // console.log("Thành viên:", members.length, members);
+        // console.log("Chia tiền:", splits.length, splits);
+        // console.groupEnd();
+
+        if (expenses[0]) {
+          const expDetail = await getExpenseById(expenses[0].id as string);
+          console.log("Chi tiết chi tiêu đầu tiên:", expDetail.data);
+        }
+        if (members[0]) {
+          const memDetail = await getMemberById(members[0].id as string);
+          console.log("Chi tiết thành viên đầu tiên:", memDetail.data);
+        }
+        if (splits[0]) {
+          const splitDetail = await getSplitById(splits[0].id as string);
+          console.log("Chi tiết chia tiền đầu tiên:", splitDetail.data);
+        }
+      }
+
+      // 6. Lưu global data
+      const newData: GlobalData = {
+        wallet: userWallet,
+        transactions,
+        teams: myTeams,
+        expenses,
+        members,
+        splits,
+      };
 
       setGlobalData(newData);
       localStorage.setItem("globalData", JSON.stringify(newData));
+
+      console.groupCollapsed("=== [AuthContext] TỔNG KẾT ===");
+      console.table({
+        User: userData.username,
+        Wallet: userWallet?.walletName,
+        Transactions: transactions.length,
+        Teams: myTeams.length,
+        Expenses: expenses.length,
+        Members: members.length,
+        Splits: splits.length,
+      });
+      console.groupEnd();
     } catch (error) {
-      console.warn("[LoadData] Không thể tải dữ liệu toàn hệ thống:", error);
+      console.error("[Auth LoadData] Lỗi tải dữ liệu:", error);
+      message.error("Không thể tải dữ liệu người dùng.");
     }
   };
 
@@ -271,4 +291,5 @@ export const AuthProvider = ({ children }: { children: ReactNode }): ReactElemen
   );
 };
 
+/* ================== CUSTOM HOOK ================== */
 export const useAuth = (): AuthContextType => useContext(AuthContext);

@@ -1,33 +1,27 @@
-// schema/walletSchema.js
 import Joi from "joi";
 
 export const walletSchema = Joi.object({
-  userId: Joi.string().hex().length(24).required(),
-  tenVi:  Joi.string().max(100).default("Ví chính"),
-  loaiVi: Joi.string().valid("CÁ NHÂN", "NHÓM").default("CÁ NHÂN"),
-
-  // Banking
-  chuTaiKhoan: Joi.string().trim().required(),
-  soTaiKhoan:  Joi.string().trim().required(),
-  maNganHang:  Joi.string().trim().required(),
-  maNapas:     Joi.string().trim().required(),
-  tenNganHang: Joi.string().trim().required(),
-
-  // Limits
-  gioiHanRut: Joi.number().positive().max(100000000).optional(),
-  gioiHanNap: Joi.number().positive().max(200000000).optional(),
-
-  // Optional flags
-  maPIN:        Joi.string().min(4).max(12).optional(),
-  isLinkedBank: Joi.boolean().optional(),
-});
-
-export const giaoDichSchema = Joi.object({
-  userId: Joi.string().hex().length(24).required(),
-  loai:   Joi.string().valid("NAP", "RUT", "CHUYEN", "THANHTOAN").required(),
-  soTien: Joi.number().positive().required(),
-  moTa:   Joi.string().allow("").optional(),
-  fee:    Joi.number().min(0).default(0),
-  deviceInfo: Joi.string().allow("").optional(),
-  category:   Joi.string().allow("").optional(),
+  userId: Joi.string().required().messages({
+    "any.required": `"userId" là bắt buộc`,
+  }),
+  walletName: Joi.string().trim().min(2).max(100).required().messages({
+    "string.empty": `"walletName" không được để trống`,
+    "any.required": `"walletName" là bắt buộc`,
+  }),
+  walletType: Joi.string().valid("personal", "group").default("personal"),
+  balance: Joi.number().min(0).default(0),
+  totalDeposit: Joi.number().min(0).default(0),
+  totalWithdraw: Joi.number().min(0).default(0),
+  withdrawLimit: Joi.number().min(0).default(0),
+  depositLimit: Joi.number().min(0).default(0),
+  bankAccount_holderName: Joi.string().trim().allow(""),
+  bankAccount_number: Joi.string().trim().allow(""),
+  bankAccount_bankCode: Joi.string().trim().allow(""),
+  bankAccount_napasCode: Joi.string().trim().allow(""),
+  bankAccount_bankName: Joi.string().trim().allow(""),
+  status: Joi.string().valid("active", "inactive", "locked").default("active"),
+  pinCode: Joi.string().trim().allow(""),
+  isLinkedBank: Joi.boolean().default(false),
+  activatedAt: Joi.date().allow(null),
+  lastUpdated: Joi.date().allow(null),
 });

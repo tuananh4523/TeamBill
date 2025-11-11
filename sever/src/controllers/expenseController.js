@@ -1,160 +1,143 @@
 import Expense from "../models/expenseModel.js";
+import { expenseSchema } from "../schema/expenseSchema.js";
 
-// // Tạo expense mới
-// export const createExpense = async (req, res) => {
-//   try {
-//     const expense = await Expense.create(req.body);
-//     res.status(201).json(expense);
-//   } catch (error) {
-//     res.status(400).json({ error: error.message });
-//   }
-// };
-
-// // Lấy tất cả expenses
-// export const getExpenses = async (req, res) => {
-//   try {
-//     const expenses = await Expense.find().sort({ createdAt: -1 });
-//     res.json(expenses);
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
-
-// // Lấy 1 expense theo id
-// export const getExpenseById = async (req, res) => {
-//   try {
-//     const expense = await Expense.findById(req.params.id);
-//     if (!expense) return res.status(404).json({ error: "Không tìm thấy expense" });
-//     res.json(expense);
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
-
-// // Cập nhật expense
-// export const updateExpense = async (req, res) => {
-//   try {
-//     const expense = await Expense.findByIdAndUpdate(req.params.id, req.body, { new: true });
-//     if (!expense) return res.status(404).json({ error: "Không tìm thấy expense" });
-//     res.json(expense);
-//   } catch (error) {
-//     res.status(400).json({ error: error.message });
-//   }
-// };
-
-// // Xoá expense
-// export const deleteExpense = async (req, res) => {
-//   try {
-//     const expense = await Expense.findByIdAndDelete(req.params.id);
-//     if (!expense) return res.status(404).json({ error: "Không tìm thấy expense" });
-//     res.json({ message: "Xoá thành công" });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
-
-// // Summary (tổng hợp chi tiêu)
-// export const getExpensesSummary = async (req, res) => {
-//   try {
-//     const total = await Expense.aggregate([
-//       { $group: { _id: null, totalAmount: { $sum: "$amount" }, count: { $sum: 1 } } }
-//     ]);
-//     if (total.length === 0) {
-//       return res.json({ totalAmount: 0, count: 0 });
-//     }
-//     res.json(total[0]);
-//   } catch (error) {
-//     console.error("Summary error:", error);
-//     res.status(500).json({ error: error.message });
-//   }
-// }
-
-// ================== CREATE ==================
+/* ============================================================
+   TẠO CHI TIÊU MỚI
+============================================================ */
 export const createExpense = async (req, res) => {
   try {
-    const expense = await Expense.create(req.body)
-    res.status(201).json(expense)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-}
+    const { error } = expenseSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        message: "Dữ liệu không hợp lệ",
+        details: error.details.map((m) => m.message),
+      });
+    }
 
-// ================== READ ==================
-// Lấy tất cả expenses
-export const getExpenses = async (req, res) => {
+    const {
+      teamId,
+      createdBy,
+      title,
+      amount,
+      category,
+      description,
+      paidBy,
+      splitMethod,
+      date,
+    } = req.body;
+
+    const expense = await Expense.create({
+      teamId,
+      createdBy,
+      title,
+      amount,
+      category,
+      description,
+      status: "pending",
+      paidBy,
+      splitMethod,
+      date: date ? new Date(date) : new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    res.status(201).json({
+      message: "Tạo chi tiêu thành công",
+      expense,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi tạo chi tiêu",
+      error: err.message,
+    });
+  }
+};
+
+/* ============================================================
+   LẤY DANH SÁCH CHI TIÊU THEO NHÓM
+============================================================ */
+export const getExpensesByTeam = async (req, res) => {
   try {
-    const expenses = await Expense.find().sort({ createdAt: -1 })
-    res.json(expenses)
-  } catch (error) {
-    res.status(500).json({ error: error.message })
-  }
-}
+    const { teamId } = req.params;
+    if (!teamId) {
+      return res.status(400).json({ message: "Thiếu mã nhóm (teamId)" });
+    }
 
-// Lấy 1 expense theo id
+    const expenses = await Expense.find({ teamId }).sort({ date: -1 });
+    res.status(200).json(expenses);
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi lấy danh sách chi tiêu",
+      error: err.message,
+    });
+  }
+};
+
+/* ============================================================
+   XEM CHI TIẾT CHI TIÊU
+============================================================ */
 export const getExpenseById = async (req, res) => {
   try {
-    const expense = await Expense.findById(req.params.id)
-    if (!expense) {
-      return res.status(404).json({ error: 'Không tìm thấy expense' })
-    }
-    res.json(expense)
-  } catch (error) {
-    res.status(500).json({ error: error.message })
+    const { id } = req.params;
+    const expense = await Expense.findById(id);
+    if (!expense) return res.status(404).json({ message: "Không tìm thấy chi tiêu" });
+    res.status(200).json(expense);
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi lấy chi tiết chi tiêu",
+      error: err.message,
+    });
   }
-}
+};
 
-// ================== UPDATE ==================
+/* ============================================================
+   CẬP NHẬT CHI TIÊU
+============================================================ */
 export const updateExpense = async (req, res) => {
   try {
-    const expense = await Expense.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    })
-    if (!expense) {
-      return res.status(404).json({ error: 'Không tìm thấy expense' })
+    const { id } = req.params;
+    const { error } = expenseSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        message: "Dữ liệu không hợp lệ",
+        details: error.details.map((m) => m.message),
+      });
     }
-    res.json(expense)
-  } catch (error) {
-    res.status(400).json({ error: error.message })
-  }
-}
 
-// ================== DELETE ==================
+    const updatedExpense = await Expense.findByIdAndUpdate(
+      id,
+      { ...req.body, updatedAt: new Date() },
+      { new: true }
+    );
+
+    if (!updatedExpense)
+      return res.status(404).json({ message: "Không tìm thấy chi tiêu để cập nhật" });
+
+    res.status(200).json({
+      message: "Cập nhật chi tiêu thành công",
+      expense: updatedExpense,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi cập nhật chi tiêu",
+      error: err.message,
+    });
+  }
+};
+
+/* ============================================================
+   XÓA CHI TIÊU
+============================================================ */
 export const deleteExpense = async (req, res) => {
   try {
-    const expense = await Expense.findByIdAndDelete(req.params.id)
-    if (!expense) {
-      return res.status(404).json({ error: 'Không tìm thấy expense' })
-    }
-    res.json({ message: 'Xoá thành công' })
-  } catch (error) {
-    res.status(500).json({ error: error.message })
+    const { id } = req.params;
+    const deleted = await Expense.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ message: "Không tìm thấy chi tiêu để xóa" });
+    res.status(200).json({ message: "Xóa chi tiêu thành công" });
+  } catch (err) {
+    res.status(500).json({
+      message: "Lỗi server khi xóa chi tiêu",
+      error: err.message,
+    });
   }
-}
-
-// ================== SUMMARY ==================
-export const getExpensesSummary = async (req, res) => {
-  try {
-    const total = await Expense.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalAmount: { $sum: '$amount' },
-          count: { $sum: 1 }
-        }
-      }
-    ])
-
-    if (total.length === 0) {
-      return res.json({ totalAmount: 0, count: 0 })
-    }
-
-    res.json({
-      totalAmount: total[0].totalAmount,
-      count: total[0].count
-    })
-  } catch (error) {
-    console.error('❌ Summary error:', error)
-    res.status(500).json({ error: error.message })
-  }
-}
+};

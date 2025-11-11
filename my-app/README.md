@@ -34,3 +34,48 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+
+src/
+ ├── app/
+ │   ├── (auth)/
+ │   │   ├── login/page.tsx
+ │   │   └── register/page.tsx
+ │   ├── (dashboard)/
+ │   │   ├── page.tsx
+ │   │   ├── groups/page.tsx
+ │   │   ├── expenses/page.tsx
+ │   │   └── split/[id]/page.tsx
+ │   └── api/
+ │       ├── teams/route.ts
+ │       └── expenses/route.ts
+ │
+ ├── components/
+ │   ├── layout/Sidebar.tsx
+ │   ├── layout/Topbar.tsx
+ │   ├── cards/TeamCard.tsx
+ │   ├── cards/ExpenseCard.tsx
+ │   ├── common/AuthModal.tsx
+ │   └── calendar/EventGroup.tsx
+ │
+ ├── features/
+ │   ├── groups/
+ │   │   ├── GroupList.tsx
+ │   │   └── GroupDetail.tsx
+ │   ├── expenses/
+ │   └── billing/
+ │
+ ├── hooks/
+ │   ├── useAuth.ts
+ │   └── useFetch.ts
+ │
+ ├── lib/
+ │   ├── api.ts
+ │   ├── utils.ts
+ │   └── constants.ts
+ │
+ ├── types/
+ │   ├── user.ts
+ │   ├── group.ts
+ │   └── expense.ts
