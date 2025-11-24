@@ -1,7 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AxiosError, AxiosResponse } from "axios";
 import { message } from "antd";
-import { getWallets, getWalletById, IWallet } from "@/lib/api";
+import {
+  getWallets,
+  getWalletById,
+  IWallet,
+  createTransaction,
+  ITransaction,
+  LoaiGD,
+  HuongGD,
+} from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 /* ======================== KIỂU DỮ LIỆU ======================== */
@@ -14,7 +22,10 @@ export interface WalletResponse {
   message: string;
   data: IWallet;
 }
-
+interface TransactionResponse {
+  message: string;
+  transaction: ITransaction;
+}
 /* ===========================================================
    HOOK: LẤY THÔNG TIN VÍ CỦA USER ĐĂNG NHẬP
 =========================================================== */
@@ -53,7 +64,7 @@ export const useUserWallet = () => {
         const response: AxiosResponse<IWallet | WalletResponse> =
           await getWalletById(walletId);
 
-        // ✅ Kiểm tra xem response có field data/message không
+        // Kiểm tra xem response có field data/message không
         let walletResponse: WalletResponse;
         const data = response.data;
 
@@ -87,10 +98,93 @@ export const useUserWallet = () => {
       } catch (error) {
         const err = error as AxiosError<ApiError>;
         console.error("[Wallet] Lỗi:", err.response?.data || err.message);
-        message.error(err.response?.data?.message || "Không thể tải thông tin ví");
+        message.error(
+          err.response?.data?.message || "Không thể tải thông tin ví"
+        );
         console.groupEnd();
         throw err;
       }
+    },
+  });
+};
+/* ===========================================================
+   HOOK: NẠP TIỀN VÀO VÍ
+=========================================================== */
+export const useWalletDeposit = () => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    TransactionResponse,
+    AxiosError<ApiError>,
+    { walletId: string; amount: number; description?: string }
+  >({
+    mutationFn: async ({ walletId, amount, description }) => {
+      if (!user?.id) throw new Error("Chưa đăng nhập.");
+
+      const transaction: ITransaction = {
+        walletId,
+        userId: user.id,
+        type: "deposit" as LoaiGD,
+        direction: "in" as HuongGD,
+        amount,
+        description: description || "Nạp tiền vào ví",
+        status: "completed",
+      };
+
+      const res = await createTransaction(transaction);
+      return res.data;
+    },
+
+    onSuccess: (res) => {
+      message.success(res.message || "Nạp tiền thành công");
+      queryClient.invalidateQueries({ queryKey: ["userWallet"] });
+    },
+
+    onError: (error) => {
+      const msg = error.response?.data?.message || "Không thể nạp tiền";
+      message.error(msg);
+    },
+  });
+};
+
+/* ===========================================================
+   HOOK: RÚT TIỀN KHỎI VÍ
+=========================================================== */
+export const useWalletWithdraw = () => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    TransactionResponse,
+    AxiosError<ApiError>,
+    { walletId: string; amount: number; description?: string }
+  >({
+    mutationFn: async ({ walletId, amount, description }) => {
+      if (!user?.id) throw new Error("Chưa đăng nhập.");
+
+      const transaction: ITransaction = {
+        walletId,
+        userId: user.id,
+        type: "withdraw" as LoaiGD,
+        direction: "out" as HuongGD,
+        amount,
+        description: description || "Rút tiền khỏi ví",
+        status: "completed",
+      };
+
+      const res = await createTransaction(transaction);
+      return res.data;
+    },
+
+    onSuccess: (res) => {
+      message.success(res.message || "Rút tiền thành công");
+      queryClient.invalidateQueries({ queryKey: ["userWallet"] });
+    },
+
+    onError: (error) => {
+      const msg = error.response?.data?.message || "Không thể rút tiền";
+      message.error(msg);
     },
   });
 };

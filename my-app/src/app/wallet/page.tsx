@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Card,
+  Image,
   Row,
   Col,
   Button,
   Space,
   Tag,
   Table,
+  Modal,
+  InputNumber,
   Typography,
   message,
   Tooltip,
@@ -24,9 +27,14 @@ import { Upload, Copy, RefreshCcw, Filter } from "lucide-react";
 import dayjs from "dayjs";
 import "dayjs/locale/vi";
 import copy from "copy-to-clipboard";
-import Image from "next/image";
 import type { ColumnsType } from "antd/es/table";
-import { getTransactionsByWallet, IWallet, ITransaction } from "@/lib/api";
+import {
+  getTransactionsByWallet,
+  IWallet,
+  ITransaction,
+  createVietQRDeposit,
+  confirmVietQRDeposit,
+} from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useUserWallet } from "@/lib/hook";
 
@@ -36,7 +44,6 @@ const { TabPane } = Tabs;
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-/* ================== Utils ================== */
 const formatCurrency = (num: number): string =>
   new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(num);
 
@@ -141,6 +148,22 @@ export default function WalletPage() {
   >([null, null]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  // ====== STATE NẠP TIỀN VNPAY ======
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [depositAmount, setDepositAmount] = useState<number | null>(null);
+  const [depositLoading, setDepositLoading] = useState(false);
+  // ====== STATE QUẢN LÝ QR VIETQR ======
+  const [qrInfo, setQrInfo] = useState<{
+    qrLink: string;
+    transactionId: string;
+    transCode: string;
+    bankInfo: {
+      bankName: string;
+      holderName: string;
+      accountNumber: string;
+    };
+  } | null>(null);
+
   /* ===========================================================
      HÀM TẢI DANH SÁCH GIAO DỊCH
   ============================================================ */
@@ -195,6 +218,52 @@ export default function WalletPage() {
   useEffect(() => {
     handleFilter();
   }, [dateRange, statusFilter, transactions, handleFilter]);
+
+  /* ===========================================================
+   HÀM TẠO QR NẠP TIỀN VIETQR
+=========================================================== */
+  const handleCreateVietQR = useCallback(async () => {
+    if (!wallet || !user) {
+      message.error("Không tìm thấy thông tin ví hoặc người dùng.");
+      return;
+    }
+
+    if (!depositAmount || depositAmount <= 0) {
+      message.warning("Vui lòng nhập số tiền nạp hợp lệ.");
+      return;
+    }
+
+    try {
+      setDepositLoading(true);
+
+      const userId = user.id ?? (user as { _id?: string })._id ?? "";
+      const walletId = wallet.id ?? (wallet as { _id?: string })._id ?? "";
+
+      const res = await createVietQRDeposit(walletId, {
+        amount: depositAmount,
+        userId,
+      });
+
+      if (!res.data?.qrLink) {
+        throw new Error("Server không trả về QR ViệtQR.");
+      }
+
+      // Mở modal hiển thị QR
+      setQrInfo({
+        qrLink: res.data.qrLink,
+        transactionId: res.data.transactionId,
+        transCode: res.data.transCode,
+        bankInfo: res.data.bankInfo,
+      });
+
+      message.success("Tạo mã QR thành công, vui lòng quét để nạp tiền.");
+    } catch (error) {
+      console.error("[WalletPage] Lỗi tạo QR ViệtQR:", error);
+      message.error("Không tạo được QR ViệtQR.");
+    } finally {
+      setDepositLoading(false);
+    }
+  }, [depositAmount, wallet, user]);
 
   /* ===========================================================
      CẤU HÌNH CỘT BẢNG
@@ -311,7 +380,7 @@ export default function WalletPage() {
     <ConfigProvider locale={viVN}>
       <div className="min-h-screen p-6" style={{ backgroundColor: "#DFF2FD" }}>
         <Row justify="space-between" align="middle" className="mb-5">
-          <Title level={3} className="!mb-1">
+          <Title level={3} className="!ml-1">
             Ví Team Bill
           </Title>
           <Button icon={<RefreshCcw size={16} />} onClick={() => refetch()}>
@@ -408,7 +477,11 @@ export default function WalletPage() {
 
             <Card className="mt-4">
               <Space direction="vertical" style={{ width: "100%" }}>
-                <Button type="primary" icon={<Upload size={16} />}>
+                <Button
+                  type="primary"
+                  icon={<Upload size={16} />}
+                  onClick={() => setDepositModalOpen(true)}
+                >
                   Nạp tiền
                 </Button>
                 <Button danger>Rút tiền</Button>
@@ -435,6 +508,116 @@ export default function WalletPage() {
             </Card>
           </Col>
         </Row>
+
+        {/* MODAL NẠP TIỀN VIỆTQR */}
+        <Modal
+          title="Nạp tiền vào ví qua ViệtQR"
+          open={depositModalOpen}
+          onCancel={() => {
+            if (!depositLoading) {
+              setDepositModalOpen(false);
+              setQrInfo(null);
+              setDepositAmount(null);
+            }
+          }}
+          footer={null}
+        >
+          {/* Bước 1: Nhập số tiền */}
+          {!qrInfo && (
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Text>Số tiền cần nạp (VND)</Text>
+              <InputNumber
+                style={{ width: "100%" }}
+                min={1000}
+                step={1000}
+                value={depositAmount ?? undefined}
+                onChange={(v) => setDepositAmount(v ?? null)}
+                formatter={(value) => {
+                  if (value === undefined || value === null) return "";
+                  const str = String(value).replace(/\D/g, "");
+                  return str.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                }}
+                parser={(value) => {
+                  if (!value) return 0;
+                  // Xóa toàn bộ ký tự không phải số, chuyển ".000" → 000000
+                  const cleaned = value.replace(/\./g, "").replace(/\D/g, "");
+                  return Number(cleaned);
+                }}
+                placeholder="Nhập số tiền, ví dụ: 200.000"
+              ></InputNumber>
+
+              <Button
+                type="primary"
+                block
+                loading={depositLoading}
+                onClick={handleCreateVietQR}
+              >
+                Tạo mã QR ViệtQR
+              </Button>
+            </Space>
+          )}
+
+          {/* Bước 2: Hiển thị QR */}
+          {qrInfo && (
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Text strong>Quét QR để nạp tiền</Text>
+
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <Image
+                  src={qrInfo.qrLink}
+                  alt="VietQR"
+                  width={260}
+                  height={260}
+                  style={{
+                    borderRadius: 12,
+                    border: "1px solid #eee",
+                  }}
+                  preview={false}
+                />
+              </div>
+
+              <div style={{ marginTop: 10 }}>
+                <Text strong>Ngân hàng: </Text>
+                <Text>{qrInfo.bankInfo.bankName}</Text> <br />
+                <Text strong>Chủ TK: </Text>
+                <Text>{qrInfo.bankInfo.holderName}</Text> <br />
+                <Text strong>Số TK: </Text>
+                <Text>{qrInfo.bankInfo.accountNumber}</Text> <br />
+                <Text strong>Nội dung: </Text>
+                <Text code>{qrInfo.transCode}</Text>
+              </div>
+
+              <Button
+                type="primary"
+                block
+                onClick={async () => {
+                  try {
+                    message.loading("Đang xác nhận...", 1);
+                    await confirmVietQRDeposit(qrInfo.transactionId);
+                    message.success("Xác nhận nạp tiền thành công!");
+                    setDepositModalOpen(false);
+                    setQrInfo(null);
+                    refetch(); // cập nhật lại ví
+                  } catch {
+                    message.error("Không thể xác nhận giao dịch.");
+                  }
+                }}
+              >
+                Tôi đã chuyển khoản
+              </Button>
+
+              <Button
+                block
+                onClick={() => {
+                  setQrInfo(null);
+                  setDepositAmount(null);
+                }}
+              >
+                Nhập lại số tiền
+              </Button>
+            </Space>
+          )}
+        </Modal>
       </div>
     </ConfigProvider>
   );

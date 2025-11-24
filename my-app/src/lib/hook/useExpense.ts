@@ -87,5 +87,5 @@ export const useExpenseDelete = () => {
       message.success(res.message || "Đã xóa chi tiêu");
       qc.invalidateQueries({ queryKey: ["expenses"] });
     },
-  });
+  });  
 };

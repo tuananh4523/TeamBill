@@ -1,18 +1,12 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import { message } from "antd";
 
-/* ============================================================
-   KHAI BÁO KIỂU DỮ LIỆU
-   ============================================================ */
 interface IApiErrorResponse {
   message?: string;
   error?: string;
   statusCode?: number;
 }
 
-/* ============================================================
-   CẤU HÌNH CƠ BẢN
-   ============================================================ */
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080/api";
 

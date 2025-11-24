@@ -3,27 +3,60 @@ import { message } from "antd";
 import { AxiosError } from "axios";
 import api from "@/lib/apiClient";
 
-export interface IPayment {
-  userId: string;
-  amount: number;
-  description?: string;
-  type: "NAP" | "RUT" | "CHUYEN" | "THANHTOAN";
-}
 
 interface IApiError {
   message?: string;
   error?: string;
 }
 
+export interface ITransaction {
+  id: string;
+  walletId: string;
+  userId: string;
+  code: string;
+  refCode: string;
+  type: "deposit" | "withdraw" | "transfer" | "payment";
+  direction: "in" | "out";
+  category?: string;
+  amount: number;
+  fee: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  description?: string;
+  status: "pending" | "completed" | "failed";
+  deviceInfo?: string;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IPayment {
+  walletId: string;
+  userId: string;
+  type: "deposit" | "withdraw" | "transfer" | "payment";
+  direction: "in" | "out";
+  amount: number;
+  description?: string;
+  category?: string;
+}
+
+
+interface ICreatePaymentResponse {
+  message: string;
+  transaction: ITransaction;
+}
+
 export const useCreatePayment = () => {
-  return useMutation<{ message: string; balance: number }, AxiosError<IApiError>, IPayment>({
+  return useMutation<ICreatePaymentResponse, AxiosError<IApiError>, IPayment>({
     mutationFn: async (data) => {
-      const res = await api.post<{ message: string; balance: number }>("/transactions", data);
+      const res = await api.post<ICreatePaymentResponse>("/transactions", data);
       return res.data;
     },
-    onSuccess: (data) => {
-      message.success(`Giao dịch thành công. Số dư mới: ${data.balance.toLocaleString()}₫`);
+
+    onSuccess: (res) => {
+      message.success(res.message || "Giao dịch thành công");
     },
+
     onError: (error) => {
       message.error(error.response?.data?.message || "Lỗi khi tạo giao dịch");
     },

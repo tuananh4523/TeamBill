@@ -1,34 +1,29 @@
 "use client";
 
 import React, { useState } from "react";
-import axios, { AxiosError } from "axios";
+import axios from "axios";
 import { Avatar } from "antd";
 import { UserOutlined } from "@ant-design/icons";
+import { IUser } from "@/lib/api"; 
 
-/* ================== Kiểu dữ liệu ================== */
-export type User = {
-  _id?: string;
-  username: string;
-  email?: string;
-  age?: number;
-  token?: string;
-};
+export interface LoginResponse {
+  token: string;
+  user: IUser;
+}
 
 export interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (user: User) => void;
+  onLoginSuccess: (data: LoginResponse) => void;
 }
 
-interface ApiError {
-  message?: string;
-  error?: string;
-}
+// interface ApiError {
+//   message?: string;
+//   error?: string;
+// }
 
-/* ================== API BASE ================== */
 const API_BASE = "http://localhost:8080/api";
 
-/* ================== Component ================== */
 const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
@@ -44,8 +39,9 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  /* ================== Gửi form ================== */
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault();
     setMessageText("");
     setLoading(true);
@@ -59,32 +55,25 @@ const AuthModal: React.FC<AuthModalProps> = ({
         ? { username, password }
         : { username, password, email, age: typeof age === "number" ? age : 0 };
 
-      const res = await axios.post<User>(url, payload);
-      const userData = res.data;
+      const res = await axios.post<LoginResponse>(url, payload);
+      const data = res.data;
 
       if (isLogin) {
-        if (userData.token) {
-          localStorage.setItem("token", userData.token);
-        }
-        onLoginSuccess(userData);
+        localStorage.setItem("token", data.token);
+        onLoginSuccess(data);
         onClose();
       } else {
-        alert("Đăng ký thành công! Hãy đăng nhập để tiếp tục.");
+        alert("Đăng ký thành công! Hãy đăng nhập.");
         setIsLogin(true);
       }
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        const axiosErr = err as AxiosError<ApiError>;
-        const msg =
-          axiosErr.response?.data?.message ||
-          axiosErr.response?.data?.error ||
-          "Không thể kết nối đến máy chủ.";
-        setMessageText(msg);
-      } else if (err instanceof Error) {
-        setMessageText(err.message);
-      } else {
-        setMessageText("Đã xảy ra lỗi không xác định.");
-      }
+      const msg =
+        axios.isAxiosError(err) &&
+        (err.response?.data?.message || err.response?.data?.error)
+          ? err.response.data.message || err.response.data.error
+          : "Không thể kết nối máy chủ.";
+
+      setMessageText(msg);
     } finally {
       setLoading(false);
     }
@@ -140,10 +129,9 @@ const AuthModal: React.FC<AuthModalProps> = ({
                 type="number"
                 placeholder="Tuổi"
                 value={age}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : "";
-                  setAge(val);
-                }}
+                onChange={(e) =>
+                  setAge(e.target.value ? Number(e.target.value) : "")
+                }
                 className="w-full px-4 py-3 rounded-xl bg-black/30 text-white placeholder-gray-400 border border-gray-700 focus:border-green-400 outline-none"
                 required
               />
@@ -168,11 +156,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
                 : "bg-gradient-to-r from-blue-500 to-teal-400 hover:opacity-90"
             }`}
           >
-            {loading
-              ? "Đang xử lý..."
-              : isLogin
-              ? "Đăng nhập"
-              : "Đăng ký"}
+            {loading ? "Đang xử lý..." : isLogin ? "Đăng nhập" : "Đăng ký"}
           </button>
         </form>
 

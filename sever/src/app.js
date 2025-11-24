@@ -10,6 +10,8 @@ import splitRouter from './routers/splitRouter.js'
 import teamRouter from './routers/teamRouter.js'
 import walletRouter from './routers/walletRouter.js'
 import transactionRouter from './routers/transactionRouter.js'
+import paymentRouter from "./routers/paymentRouter.js";
+import categoryRouter from "./routers/categoryRouter.js";
 
 const app = express()
 
@@ -45,6 +47,8 @@ console.log('splitRouter:', splitRouter)
 console.log('teamRouter:', teamRouter)
 console.log('walletRouter:', walletRouter)
 console.log('transactionRouter', transactionRouter)
+console.log('paymentRouter', paymentRouter)
+console.log('categoryRouter', categoryRouter)
 
 // Routes components
 app.use('/api', usersRouter)
@@ -54,6 +58,8 @@ app.use('/api', splitRouter)
 app.use('/api', teamRouter)
 app.use('/api', walletRouter)
 app.use('/api', transactionRouter)
+app.use("/api", paymentRouter);
+app.use("/api", categoryRouter);
 
 // Kết nối DB
 connectDB()

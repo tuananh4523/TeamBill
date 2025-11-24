@@ -33,8 +33,9 @@ import {
   useUserTeamCreate,
   useUserTeamUpdate,
   useUserTeamDelete,
+  useMemberCreate,
 } from "@/lib/hook";
-import { ITeam, IMember, MemberStatus } from "@/lib/api";
+import API, { ITeam, IMember, MemberStatus } from "@/lib/api";
 import MemberModal from "@/components/Modals/MemberModal";
 import AuthModal from "@/components/Modals/AuthModal";
 
@@ -53,18 +54,20 @@ export default function TeamMembersPage() {
   const { mutate: updateTeam } = useUserTeamUpdate();
   const { mutate: deleteTeam } = useUserTeamDelete();
 
+  const createMember = useMemberCreate(); // <<< BỔ SUNG QUAN TRỌNG
+
   /* ================= STATE ================= */
-  const [openGroup, setOpenGroup] = useState<ITeamWithMembers | null>(null);
+  const [openTeam, setOpenTeam] = useState<ITeamWithMembers | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
-  const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
-  const [isEditGroupOpen, setIsEditGroupOpen] = useState(false);
-  const [isDeleteGroupOpen, setIsDeleteGroupOpen] = useState(false);
+  const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
+  const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
+  const [isDeleteTeamOpen, setIsDeleteTeamOpen] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [editingMember, setEditingMember] = useState<IMember | null>(null);
 
   const [form] = Form.useForm();
-  const [groupForm] = Form.useForm();
+  const [TeamForm] = Form.useForm();
 
   const sortOptions = [
     { key: "recent", label: "Mới nhất" },
@@ -74,14 +77,14 @@ export default function TeamMembersPage() {
   const [sortKey, setSortKey] = useState("recent");
 
   /* ================= CRUD NHÓM ================= */
-  const handleAddGroup = async () => {
+  const handleAddTeam = async () => {
     try {
-      const values = await groupForm.validateFields();
+      const values = await TeamForm.validateFields();
       createTeam(values, {
         onSuccess: () => {
           message.success("Tạo nhóm thành công!");
-          setIsAddGroupOpen(false);
-          groupForm.resetFields();
+          setIsAddTeamOpen(false);
+          TeamForm.resetFields();
           refetchTeams();
         },
       });
@@ -90,51 +93,114 @@ export default function TeamMembersPage() {
     }
   };
 
-  const handleUpdateGroup = async () => {
-    if (!openGroup) return;
+  const handleUpdateTeam = async () => {
+    if (!openTeam) return;
+
     try {
-      const values = await groupForm.validateFields();
-      updateTeam(
-        { id: openGroup._id ?? openGroup.id ?? "", data: values },
-        {
-          onSuccess: () => {
-            message.success("Cập nhật nhóm thành công!");
-            setIsEditGroupOpen(false);
-            groupForm.resetFields();
-            refetchTeams();
-          },
-        }
-      );
+      const values = await TeamForm.validateFields();
+      const teamId = openTeam._id ?? openTeam.id ?? "";
+
+      const res = await API.put(`/teams/${teamId}`, values);
+
+      message.success("Cập nhật nhóm thành công!");
+
+      setOpenTeam({
+        ...openTeam,
+        ...res.data.team,
+      });
+
+      setIsEditTeamOpen(false);
+      TeamForm.resetFields();
+      refetchTeams();
     } catch {
-      message.error("Lỗi khi cập nhật nhóm!");
+      message.error("Không thể cập nhật nhóm!");
     }
   };
 
-  const handleDeleteGroup = async () => {
-    if (!openGroup) return;
-    if (deleteConfirmName !== openGroup.name) {
+  const handleDeleteTeam = async () => {
+    if (!openTeam) return;
+
+    if (deleteConfirmName !== openTeam.name) {
       message.warning("Tên nhóm không khớp, không thể xoá!");
       return;
     }
-    deleteTeam(openGroup._id ?? openGroup.id ?? "", {
+
+    deleteTeam(openTeam._id ?? openTeam.id ?? "", {
       onSuccess: () => {
         message.success("Đã xoá nhóm thành công!");
-        setOpenGroup(null);
-        setIsDeleteGroupOpen(false);
+        setOpenTeam(null);
+        setIsDeleteTeamOpen(false);
         setDeleteConfirmName("");
         refetchTeams();
       },
     });
   };
 
-  /* ================= CRUD THÀNH VIÊN ================= */
-  const handleSaveMember = async () => {
-    message.info("Chức năng quản lý thành viên sẽ được thêm sau.");
-    setIsMemberModalOpen(false);
+  /* ================= FETCH MEMBERS ================= */
+  const fetchMembers = async (teamId: string): Promise<IMember[]> => {
+    try {
+      const res = await API.get(`/members/team/${teamId}`);
+      return res.data;
+    } catch {
+      message.error("Không thể tải danh sách thành viên");
+      return [];
+    }
   };
 
-  const handleDeleteMember = async () => {
-    message.info("Chức năng xóa thành viên sẽ được thêm sau.");
+  /* ================= CRUD THÀNH VIÊN ================= */
+  const handleSaveMember = async (values: Partial<IMember>) => {
+    if (!openTeam) return;
+
+    try {
+      const teamId = openTeam._id ?? openTeam.id ?? "";
+      const payload = {
+        name: values.name ?? "",
+        email: values.email ?? "",
+        role: values.role,
+        status: values.status,
+        teamId,
+        userId: user?.id ?? "",
+      };
+
+      // 1) Gọi API tạo thành viên
+      const result = await createMember.mutateAsync(payload);
+
+      message.success(result.message || "Thêm thành viên thành công!");
+
+      // 2) Load danh sách members
+      const res = await API.get(`/members/team/${teamId}`);
+
+      setOpenTeam({
+        ...openTeam,
+        members: res.data,
+      });
+
+      setIsMemberModalOpen(false);
+      setEditingMember(null);
+      form.resetFields();
+    } catch {
+      message.error("Không thể thêm thành viên!");
+    }
+  };
+
+  const handleDeleteMember = async (memberId: string) => {
+    if (!openTeam) return;
+
+    const teamId = openTeam._id ?? openTeam.id ?? "";
+
+    try {
+      await API.delete(`/members/${memberId}`);
+      message.success("Xoá thành viên thành công!");
+
+      const res = await API.get(`/members/team/${teamId}`);
+
+      setOpenTeam({
+        ...openTeam,
+        members: res.data,
+      });
+    } catch {
+      message.error("Không thể xoá thành viên!");
+    }
   };
 
   /* ================= CỘT BẢNG ================= */
@@ -178,7 +244,12 @@ export default function TeamMembersPage() {
           >
             Sửa
           </Button>
-          <Button type="link" danger onClick={handleDeleteMember}>
+
+          <Button
+            type="link"
+            danger
+            onClick={() => handleDeleteMember(record._id ?? record.id ?? "")}
+          >
             Xóa
           </Button>
         </Space>
@@ -211,7 +282,7 @@ export default function TeamMembersPage() {
               size="large"
               icon={<PlusOutlined />}
               className="shadow-sm"
-              onClick={() => setIsAddGroupOpen(true)}
+              onClick={() => setIsAddTeamOpen(true)}
             >
               Thêm nhóm
             </Button>
@@ -244,31 +315,32 @@ export default function TeamMembersPage() {
 
         {/* Danh sách nhóm */}
         <Row gutter={[16, 16]}>
-          {(teams as ITeamWithMembers[])?.map((group: ITeamWithMembers) => {
-            const hasActive = group.members?.some(
+          {(teams as ITeamWithMembers[])?.map((Team: ITeamWithMembers) => {
+            const hasActive = Team.members?.some(
               (m: IMember) => m.status === MemberStatus.Active
             );
-            const cardColor = group.members?.length
+
+            const cardColor = Team.members?.length
               ? hasActive
                 ? "#f0fff4"
                 : "#fff5f5"
               : "#f7f9fa";
 
             return (
-              <Col xs={24} sm={12} lg={8} key={group._id}>
+              <Col xs={24} sm={12} lg={8} key={Team._id}>
                 <Card
                   className="rounded-2xl border-0 shadow-md hover:shadow-lg transition-all cursor-pointer"
                   style={{ backgroundColor: cardColor }}
-                  onClick={() => router.push(`/split/${group._id}`)}
+                  onClick={() => router.push(`/split/${Team._id}`)}
                 >
-                  {/* Header nhóm */}
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-lg font-semibold text-gray-800">
-                      {group.name}
+                      {Team.name}
                     </h3>
+
                     <Tag
                       color={
-                        group.members?.length === 0
+                        Team.members?.length === 0
                           ? "default"
                           : hasActive
                           ? "green"
@@ -276,7 +348,7 @@ export default function TeamMembersPage() {
                       }
                       style={{ borderRadius: 8, padding: "2px 10px" }}
                     >
-                      {group.members?.length === 0
+                      {Team.members?.length === 0
                         ? "Chưa có thành viên"
                         : hasActive
                         ? "Hoạt động"
@@ -284,19 +356,18 @@ export default function TeamMembersPage() {
                     </Tag>
                   </div>
 
-                  {/* Avatar thành viên */}
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex -space-x-2">
-                      {group.members?.slice(0, 4).map((m: IMember) => (
+                      {Team.members?.slice(0, 4).map((m: IMember) => (
                         <Avatar
                           key={m._id}
                           src={`https://i.pravatar.cc/32?u=${m._id}`}
                           className="border-2 border-white"
                         />
                       ))}
-                      {group.members && group.members.length > 4 && (
+                      {Team.members && Team.members.length > 4 && (
                         <div className="w-8 h-8 flex items-center justify-center bg-gray-200 text-xs rounded-full border-2 border-white">
-                          +{group.members.length - 4}
+                          +{Team.members.length - 4}
                         </div>
                       )}
                     </div>
@@ -305,16 +376,17 @@ export default function TeamMembersPage() {
                       type="text"
                       icon={<SettingOutlined />}
                       className="text-gray-500 hover:text-blue-600"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        setOpenGroup(group);
+                        const teamId = Team._id ?? Team.id ?? "";
+                        const members = await fetchMembers(teamId);
+                        setOpenTeam({ ...Team, members });
                       }}
                     />
                   </div>
 
-                  {/* Dòng cuối */}
                   <div className="flex justify-between text-sm text-gray-600 mt-2">
-                    <span>{group.members?.length || 0} thành viên</span>
+                    <span>{Team.members?.length || 0} thành viên</span>
                     <Text
                       type="secondary"
                       className="text-blue-600 font-medium"
@@ -332,11 +404,11 @@ export default function TeamMembersPage() {
         <Modal
           title={
             <span className="font-semibold text-lg text-gray-800">
-              Danh sách thành viên - {openGroup?.name || ""}
+              Danh sách thành viên - {openTeam?.name || ""}
             </span>
           }
-          open={!!openGroup}
-          onCancel={() => setOpenGroup(null)}
+          open={!!openTeam}
+          onCancel={() => setOpenTeam(null)}
           footer={null}
           width={800}
         >
@@ -361,8 +433,8 @@ export default function TeamMembersPage() {
                 icon={<EditOutlined />}
                 className="shadow-sm"
                 onClick={() => {
-                  groupForm.setFieldsValue({ name: openGroup?.name });
-                  setIsEditGroupOpen(true);
+                  TeamForm.setFieldsValue({ name: openTeam?.name });
+                  setIsEditTeamOpen(true);
                 }}
               >
                 Sửa tên nhóm
@@ -374,7 +446,7 @@ export default function TeamMembersPage() {
               shape="round"
               icon={<DeleteOutlined />}
               className="shadow-sm"
-              onClick={() => setIsDeleteGroupOpen(true)}
+              onClick={() => setIsDeleteTeamOpen(true)}
             >
               Xóa nhóm
             </Button>
@@ -382,7 +454,7 @@ export default function TeamMembersPage() {
 
           <Table
             rowKey="_id"
-            dataSource={openGroup?.members || []}
+            dataSource={openTeam?.members || []}
             columns={memberColumns}
             pagination={false}
             size="middle"
@@ -394,22 +466,27 @@ export default function TeamMembersPage() {
         {/* Modal thêm thành viên */}
         <MemberModal
           open={isMemberModalOpen}
-          onCancel={() => setIsMemberModalOpen(false)}
-          onSave={handleSaveMember}
+          onCancel={() => {
+            setIsMemberModalOpen(false);
+            setEditingMember(null);
+          }}
+          onSubmit={handleSaveMember}
           form={form}
           editingMember={editingMember}
+          teamId={openTeam?._id ?? ""}
+          userId={user?.id ?? ""}
         />
 
         {/* Modal tạo nhóm */}
         <Modal
           title="Tạo nhóm mới"
-          open={isAddGroupOpen}
-          onCancel={() => setIsAddGroupOpen(false)}
-          onOk={handleAddGroup}
+          open={isAddTeamOpen}
+          onCancel={() => setIsAddTeamOpen(false)}
+          onOk={handleAddTeam}
           okText="Tạo"
           cancelText="Hủy"
         >
-          <Form form={groupForm} layout="vertical">
+          <Form form={TeamForm} layout="vertical">
             <Form.Item
               label="Tên nhóm"
               name="name"
@@ -423,13 +500,13 @@ export default function TeamMembersPage() {
         {/* Modal sửa nhóm */}
         <Modal
           title="Sửa tên nhóm"
-          open={isEditGroupOpen}
-          onCancel={() => setIsEditGroupOpen(false)}
-          onOk={handleUpdateGroup}
+          open={isEditTeamOpen}
+          onCancel={() => setIsEditTeamOpen(false)}
+          onOk={handleUpdateTeam}
           okText="Lưu"
           cancelText="Hủy"
         >
-          <Form form={groupForm} layout="vertical">
+          <Form form={TeamForm} layout="vertical">
             <Form.Item
               label="Tên nhóm"
               name="name"
@@ -447,18 +524,18 @@ export default function TeamMembersPage() {
               Xác nhận xoá nhóm
             </span>
           }
-          open={isDeleteGroupOpen}
+          open={isDeleteTeamOpen}
           onCancel={() => {
-            setIsDeleteGroupOpen(false);
+            setIsDeleteTeamOpen(false);
             setDeleteConfirmName("");
           }}
-          onOk={handleDeleteGroup}
+          onOk={handleDeleteTeam}
           okText="Xóa"
           okButtonProps={{ danger: true }}
           cancelText="Hủy"
         >
           <p>
-            Nhập tên nhóm <b>{openGroup?.name}</b> để xác nhận xoá:
+            Nhập tên nhóm <b>{openTeam?.name}</b> để xác nhận xoá:
           </p>
           <Input
             value={deleteConfirmName}
