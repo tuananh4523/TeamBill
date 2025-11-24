@@ -15,6 +15,7 @@ import {
   Dropdown,
   Table,
   Tag,
+  ConfigProvider,
 } from "antd";
 import {
   PlusOutlined,
@@ -26,8 +27,9 @@ import {
   AppstoreOutlined,
 } from "@ant-design/icons";
 import type { TableProps } from "antd";
+import viVN from "antd/es/locale/vi_VN";
 
-import AuthModal, { User } from "@/components/Modals/AuthModal";
+import AuthModal from "@/components/Modals/AuthModal";
 
 // ================== Kiểu dữ liệu ==================
 export type Category = {
@@ -38,36 +40,11 @@ export type Category = {
 };
 
 const initialCategories: Category[] = [
-  {
-    id: "1",
-    name: "Ăn uống",
-    color: "blue",
-    description: "Chi phí ăn uống hằng ngày",
-  },
-  {
-    id: "2",
-    name: "Shopping",
-    color: "red",
-    description: "Mua sắm quần áo, đồ dùng",
-  },
-  {
-    id: "3",
-    name: "Cafe",
-    color: "purple",
-    description: "Cafe, trà sữa, đồ uống",
-  },
-  {
-    id: "4",
-    name: "Đi lại",
-    color: "green",
-    description: "Taxi, Grab, xăng xe, vé xe bus",
-  },
-  {
-    id: "5",
-    name: "Giải trí",
-    color: "gold",
-    description: "Phim ảnh, karaoke, trò chơi",
-  },
+  { id: "1", name: "Ăn uống", color: "blue", description: "Chi phí ăn uống hằng ngày" },
+  { id: "2", name: "Shopping", color: "red", description: "Mua sắm quần áo, đồ dùng" },
+  { id: "3", name: "Cafe", color: "purple", description: "Cafe, trà sữa, đồ uống" },
+  { id: "4", name: "Đi lại", color: "green", description: "Taxi, Grab, xăng xe, vé xe bus" },
+  { id: "5", name: "Giải trí", color: "gold", description: "Phim ảnh, karaoke, trò chơi" },
   { id: "6", name: "Khác", color: "gray", description: "Các chi phí khác" },
 ];
 
@@ -78,7 +55,6 @@ export default function CategoriesPage() {
   const [form] = Form.useForm<Category>();
 
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [user, setUser] = useState<User | null>(null);
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -90,32 +66,27 @@ export default function CategoriesPage() {
     { key: "za", label: "Theo tên (Z → A)" },
   ];
 
-  // ========== Mở modal ==========
+  // ================== Mở modal ==================
   const openModal = (category?: Category) => {
     setEditingCategory(category || null);
     setIsModalOpen(true);
-    if (category) {
-      form.setFieldsValue(category);
-    } else {
-      form.resetFields();
-    }
+    category ? form.setFieldsValue(category) : form.resetFields();
   };
 
-  // ========== Lưu ==========
+  // ================== Lưu ==================
   const handleSave = () => {
     form.validateFields().then((values) => {
       if (editingCategory) {
         setCategories((prev) =>
-          prev.map((c) =>
-            c.id === editingCategory.id ? { ...c, ...values } : c
-          )
+          prev.map((c) => (c.id === editingCategory.id ? { ...c, ...values } : c))
         );
         message.success("Cập nhật danh mục thành công!");
       } else {
-        const { id, ...rest } = values;
         const newCategory: Category = {
           id: String(Date.now()),
-          ...rest,
+          name: values.name,
+          color: values.color,
+          description: values.description,
         };
         setCategories((prev) => [...prev, newCategory]);
         message.success("Thêm danh mục thành công!");
@@ -125,23 +96,20 @@ export default function CategoriesPage() {
     });
   };
 
-  // ========== Xóa ==========
+  // ================== Xóa ==================
   const handleDelete = (id: string) => {
     setCategories((prev) => prev.filter((c) => c.id !== id));
     message.success("Xoá danh mục thành công!");
   };
 
-  // ========== Cột bảng ==========
+  // ================== Bảng list ==================
   const columns: TableProps<Category>["columns"] = [
     {
       title: "Tên danh mục",
       dataIndex: "name",
       key: "name",
       render: (text: string, record: Category) => (
-        <Tag
-          color={record.color}
-          style={{ fontWeight: 500, padding: "4px 10px", borderRadius: 6 }}
-        >
+        <Tag color={record.color} style={{ fontWeight: 500, padding: "5px 12px", borderRadius: 6 }}>
           {text}
         </Tag>
       ),
@@ -154,11 +122,11 @@ export default function CategoriesPage() {
         <div className="flex items-center gap-2">
           <span
             style={{
-              display: "inline-block",
               width: 12,
               height: 12,
               borderRadius: "50%",
               backgroundColor: color,
+              display: "inline-block",
             }}
           />
           <span style={{ color }}>{color}</span>
@@ -169,21 +137,17 @@ export default function CategoriesPage() {
     {
       title: "Hành động",
       key: "actions",
-      align: "center" as const, // ✅ fix align type
-      render: (_: unknown, record: Category) => (
+      align: "center",
+      render: (_, record) => (
         <Space>
           <Button icon={<EditOutlined />} onClick={() => openModal(record)} />
-          <Button
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.id)}
-          />
+          <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
         </Space>
       ),
     },
   ];
 
-  // ========== Sort ==========
+  // ================== Sort ==================
   const sortedCategories = [...categories].sort((a, b) => {
     if (sortKey === "az") return a.name.localeCompare(b.name);
     if (sortKey === "za") return b.name.localeCompare(a.name);
@@ -191,70 +155,50 @@ export default function CategoriesPage() {
   });
 
   return (
-    <div className="min-h-screen font-sans text-gray-800">
-      <main className="p-2">
-        {/* Tiêu đề */}
-        <h1 className="text-2xl font-bold text-gray-800 mb-1">
-          Quản lý danh mục
-        </h1>
-        <p className="text-gray-500 mb-6">Xem và quản lý các danh mục của bạn</p>
-
-        {/* Header action bar */}
+    <ConfigProvider locale={viVN}>
+      <div
+        className="min-h-screen px-6 py-6"
+        style={{ backgroundColor: "#DFF2FD", fontFamily: "Inter" }}
+      >
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          {/* Nút thêm bên trái */}
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            shape="round"
-            onClick={() => openModal()}
-          >
-            Thêm danh mục
-          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">Danh mục chi tiêu</h1>
+          </div>
 
-          {/* Toggle + Sort bên phải */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {/* Toggle view */}
-            <div className="flex border border-gray-300 rounded-md overflow-hidden">
+            <div className="flex border border-gray-300 rounded-md overflow-hidden shadow-sm">
               <button
                 className={`flex items-center gap-1 px-3 py-1.5 text-sm ${
-                  viewMode === "grid"
-                    ? "bg-blue-50 text-blue-600 font-medium"
-                    : "bg-white text-gray-600"
+                  viewMode === "grid" ? "bg-blue-50 text-blue-600" : "bg-white text-gray-600"
                 }`}
                 onClick={() => setViewMode("grid")}
               >
-                <CheckOutlined
-                  className={`text-xs ${viewMode !== "grid" ? "opacity-0" : ""}`}
-                />
                 <AppstoreOutlined />
               </button>
               <button
                 className={`flex items-center gap-1 px-3 py-1.5 text-sm ${
-                  viewMode === "list"
-                    ? "bg-blue-50 text-blue-600 font-medium"
-                    : "bg-white text-gray-600"
+                  viewMode === "list" ? "bg-blue-50 text-blue-600" : "bg-white text-gray-600"
                 }`}
                 onClick={() => setViewMode("list")}
               >
-                <CheckOutlined
-                  className={`text-xs ${viewMode !== "list" ? "opacity-0" : ""}`}
-                />
                 <UnorderedListOutlined />
               </button>
             </div>
 
-            {/* Sort dropdown */}
+            {/* Sort */}
             <Dropdown
-              menu={{
-                items: sortMenu,
-                onClick: (info) => setSortKey(info.key),
-              }}
+              menu={{ items: sortMenu, onClick: (info) => setSortKey(info.key) }}
             >
               <Button shape="round">
-                {sortMenu.find((i) => i.key === sortKey)?.label}{" "}
-                <DownOutlined />
+                {sortMenu.find((i) => i.key === sortKey)?.label} <DownOutlined />
               </Button>
             </Dropdown>
+
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} shape="round">
+              Thêm
+            </Button>
           </div>
         </div>
 
@@ -264,38 +208,33 @@ export default function CategoriesPage() {
             {sortedCategories.map((cat) => (
               <Col key={cat.id} xs={24} sm={12} md={8} lg={6}>
                 <Card
+                  className="shadow-sm"
                   style={{
+                    borderRadius: 12,
                     borderTop: `4px solid ${cat.color}`,
-                    height: "100%",
+                    paddingTop: 16,
+                    minHeight: 165,
                   }}
-                  className="shadow-sm flex flex-col justify-between"
                 >
-                  <div>
-                    <Tag
-                      color={cat.color}
-                      style={{
-                        fontWeight: 500,
-                        padding: "6px 12px",
-                        fontSize: "14px",
-                        borderRadius: 6,
-                      }}
-                    >
-                      {cat.name}
-                    </Tag>
-                    <p className="text-gray-500 mt-3 text-sm">
-                      {cat.description || "Không có mô tả"}
-                    </p>
-                  </div>
+                  <Tag
+                    color={cat.color}
+                    style={{
+                      fontWeight: 500,
+                      padding: "6px 12px",
+                      fontSize: 15,
+                      borderRadius: 6,
+                    }}
+                  >
+                    {cat.name}
+                  </Tag>
+
+                  <p className="text-gray-600 mt-3 text-sm">
+                    {cat.description || "Không có mô tả"}
+                  </p>
+
                   <div className="mt-4 flex justify-end gap-2">
-                    <Button
-                      icon={<EditOutlined />}
-                      onClick={() => openModal(cat)}
-                    />
-                    <Button
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => handleDelete(cat.id)}
-                    />
+                    <Button icon={<EditOutlined />} onClick={() => openModal(cat)} />
+                    <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(cat.id)} />
                   </div>
                 </Card>
               </Col>
@@ -307,58 +246,57 @@ export default function CategoriesPage() {
             dataSource={sortedCategories}
             columns={columns}
             rowKey="id"
-            pagination={false}
+            style={{ borderRadius: 10, overflow: "hidden", background: "white" }}
           />
         )}
-      </main>
 
-      {/* Modal thêm/sửa */}
-      <Modal
-        title={editingCategory ? "Sửa danh mục" : "Thêm danh mục"}
-        open={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
-        onOk={handleSave}
-        okText="Lưu"
-        cancelText="Hủy"
-      >
-        <Form form={form} layout="vertical">
-          <Row gutter={24}>
-            <Col span={18}>
-              <Form.Item
-                label="Tên danh mục"
-                name="name"
-                rules={[{ required: true, message: "Vui lòng nhập tên danh mục" }]}
-              >
-                <Input placeholder="Ví dụ: Ăn uống" />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item
-                label="Màu sắc"
-                name="color"
-                rules={[{ required: true, message: "Chọn màu cho danh mục" }]}
-              >
-                <ColorPicker
-                  format="hex"
-                  onChange={(color) =>
-                    form.setFieldsValue({ color: color.toHexString() })
-                  }
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item label="Mô tả" name="description">
-            <Input.TextArea placeholder="Nhập mô tả chi tiết" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        {/* Modal thêm/sửa */}
+        <Modal
+          title={editingCategory ? "Sửa danh mục" : "Thêm danh mục"}
+          open={isModalOpen}
+          onCancel={() => setIsModalOpen(false)}
+          onOk={handleSave}
+          okText="Lưu"
+          cancelText="Hủy"
+        >
+          <Form form={form} layout="vertical">
+            <Row gutter={24}>
+              <Col span={18}>
+                <Form.Item
+                  label="Tên danh mục"
+                  name="name"
+                  rules={[{ required: true, message: "Vui lòng nhập tên danh mục" }]}
+                >
+                  <Input placeholder="Ví dụ: Ăn uống" size="large" />
+                </Form.Item>
+              </Col>
 
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={(u) => setUser(u)}
-      />
-    </div>
+              <Col span={6}>
+                <Form.Item
+                  label="Màu sắc"
+                  name="color"
+                  rules={[{ required: true, message: "Chọn màu cho danh mục" }]}
+                >
+                  <ColorPicker
+                    format="hex"
+                    onChange={(color) => form.setFieldsValue({ color: color.toHexString() })}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item label="Mô tả" name="description">
+              <Input.TextArea placeholder="Nhập mô tả chi tiết" rows={4} />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onLoginSuccess={(u) => setUser(u)}
+        />
+      </div>
+    </ConfigProvider>
   );
 }

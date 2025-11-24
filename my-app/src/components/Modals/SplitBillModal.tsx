@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Form,
   Input,
@@ -17,34 +17,34 @@ import {
 } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
 import type { Dayjs } from "dayjs";
-import axios from "axios";
 import viVN from "antd/es/locale/vi_VN";
 import dayjs from "dayjs";
 import "dayjs/locale/vi";
+
+import { useAuth } from "@/context/AuthContext";
+import { useCategories } from "@/lib/hook/useCategory";
+import { useExpenseCreate } from "@/lib/hook/useExpense";
+import { useSplitCreate } from "@/lib/hook/useSplit";
+import type { IExpense, ISplit } from "@/lib/api";
 
 dayjs.locale("vi");
 
 type SplitType = "equally" | "unequally";
 
-type SplitBillFormProps = {
-  selectedDate?: Dayjs;
-  onSaved?: (event: CalendarEvent) => void; // 👈 callback khi lưu xong
+export type CalendarEvent = {
+  id: string;
+  title: string;
+  start: string;
+  total?: number;
+  categoryId?: string;
+  note?: string;
+  teamId?: string;
 };
 
-
-const API_BASE = "http://localhost:8080/api";
-
-const mockGroups = [
-  { id: "g1", name: "Nhóm bạn bè", members: ["An", "Bình", "Chi"] },
-  { id: "g2", name: "Nhóm công ty", members: ["Dũng", "Hà", "Linh", "Minh"] },
-];
-
-// ✅ dùng chung Category với trang danh mục
-export type Category = {
-  id: string;
-  name: string;
-  color: string;
-  description?: string;
+type SplitBillFormProps = {
+  selectedDate?: Dayjs;
+  onSaved?: (event: CalendarEvent) => void;
+  teamId: string;
 };
 
 type SplitBillFormValues = {
@@ -52,11 +52,20 @@ type SplitBillFormValues = {
   participantName?: string;
   paidBy?: string;
   date?: Dayjs;
-  categoryId?: string; // chọn theo id danh mục
+  categoryId?: string;
   note?: string;
 };
 
-export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
+const mockGroups = [
+  { id: "g1", name: "Nhóm bạn bè", members: ["An", "Bình", "Chi"] },
+  { id: "g2", name: "Nhóm công ty", members: ["Dũng", "Hà", "Linh", "Minh"] },
+];
+
+export default function SplitBillForm({
+  selectedDate,
+  teamId,
+  onSaved,
+}: SplitBillFormProps) {
   const [form] = Form.useForm<SplitBillFormValues>();
   const [participants, setParticipants] = useState<string[]>([]);
   const [splitType, setSplitType] = useState<SplitType>("equally");
@@ -65,104 +74,74 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
   const [result, setResult] = useState<
     { from: string; to: string; amount: number }[]
   >([]);
-  const [saving, setSaving] = useState(false);
 
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { user } = useAuth();
 
-  // ===== Lấy danh mục từ API (hoặc fake)
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        // ⚡ Nếu backend đã có API: GET /categories
-        const res = await axios.get<Category[]>(`${API_BASE}/categories`);
-        setCategories(res.data);
-      } catch {
-        // fallback nếu chưa có API thì dùng fake
-        setCategories([
-          { id: "1", name: "Ăn uống", color: "blue" },
-          { id: "2", name: "Shopping", color: "red" },
-          { id: "3", name: "Cafe", color: "purple" },
-          { id: "4", name: "Đi lại", color: "green" },
-          { id: "5", name: "Giải trí", color: "gold" },
-          { id: "6", name: "Khác", color: "gray" },
-        ]);
-      }
-    };
-    fetchCategories();
-  }, []);
+  // ======================
+  // 🔥 CATEGORY API MỚI
+  // ======================
+  const { data: categories = [] } = useCategories(user?.id);
 
-  // ===== Thêm thành viên đơn =====
+  const expenseCreate = useExpenseCreate();
+  const splitCreate = useSplitCreate();
+
+  // ----- Thêm 1 thành viên -----
   const addParticipant = (name?: string) => {
-    if (!name) {
-      message.error("Vui lòng nhập tên");
-      return;
-    }
-    if (participants.includes(name)) {
-      message.warning("Thành viên đã tồn tại");
-      return;
-    }
+    if (!name) return message.error("Vui lòng nhập tên");
+    if (participants.includes(name))
+      return message.warning("Thành viên đã tồn tại");
+
     setParticipants((prev) => [...prev, name]);
     form.setFieldValue("participantName", "");
   };
 
-  // ===== Thêm nhóm =====
+  // ----- Thêm nhóm -----
   const addGroups = (groupIds: string[]) => {
     const selectedGroups = mockGroups.filter((g) => groupIds.includes(g.id));
     const newMembers = selectedGroups
       .flatMap((g) => g.members)
       .filter((m) => !participants.includes(m));
-    if (newMembers.length === 0) {
-      message.info("Các thành viên trong nhóm đã có hết");
-      return;
-    }
+
+    if (!newMembers.length) return message.info("Nhóm này đã có hết");
+
     setParticipants((prev) => [...prev, ...newMembers]);
   };
 
-  // ===== Xóa thành viên =====
+  // ----- Xóa người tham gia -----
   const removeParticipant = (name: string) => {
     setParticipants((prev) => prev.filter((p) => p !== name));
-    const newCustom = { ...customAmounts };
-    delete newCustom[name];
-    setCustomAmounts(newCustom);
+    const clone = { ...customAmounts };
+    delete clone[name];
+    setCustomAmounts(clone);
   };
 
-  // ===== Tính toán =====
+  // ----- Tính toán chia tiền -----
   const handleCalculate = async () => {
     try {
       const values = await form.validateFields();
-      if (participants.length < 2) {
-        message.error("Cần ít nhất 2 người tham gia");
-        return;
-      }
-      const amount = Number(values.amount);
-      if (isNaN(amount) || amount <= 0) {
-        message.error("Số tiền không hợp lệ");
-        return;
-      }
-      const paidBy = values.paidBy;
-      if (!paidBy) {
-        message.error("Chọn người đã trả tiền");
-        return;
-      }
+      if (participants.length < 2)
+        return message.error("Cần ít nhất 2 người tham gia");
 
+      const amount = Number(values.amount);
+      if (!amount || amount <= 0) return message.error("Số tiền không hợp lệ");
+
+      const paidBy = values.paidBy!;
       const balances: Record<string, number> = {};
+
       participants.forEach((p) => (balances[p] = 0));
 
       if (splitType === "equally") {
-        const perPerson = amount / participants.length;
-        participants.forEach((p) => {
-          balances[p] = -perPerson;
-        });
-        balances[paidBy] = amount - perPerson;
+        const per = amount / participants.length;
+        participants.forEach((p) => (balances[p] = -per));
+        balances[paidBy] = amount - per;
       } else {
         const totalCustom = Object.values(customAmounts).reduce(
           (a, b) => a + b,
           0
         );
-        if (totalCustom !== amount) {
-          message.error("Tổng số tiền nhập không khớp với hóa đơn");
-          return;
-        }
+        if (totalCustom !== amount)
+          return message.error("Tổng số tiền không khớp");
+
         participants.forEach((p) => {
           balances[p] = -(customAmounts[p] || 0);
         });
@@ -170,124 +149,134 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
       }
 
       const creditors = Object.entries(balances)
-        .filter(([, val]) => val > 0)
-        .map(([name, val]) => ({ name, amount: val }));
-      const debtors = Object.entries(balances)
-        .filter(([, val]) => val < 0)
-        .map(([name, val]) => ({ name, amount: -val }));
+        .filter(([, v]) => v > 0)
+        .map(([name, amount]) => ({ name, amount }));
 
-      const transactions: { from: string; to: string; amount: number }[] = [];
+      const debtors = Object.entries(balances)
+        .filter(([, v]) => v < 0)
+        .map(([name, amount]) => ({ name, amount: -amount }));
+
+      const tx: { from: string; to: string; amount: number }[] = [];
       let i = 0,
         j = 0;
 
       while (i < debtors.length && j < creditors.length) {
-        const debtor = debtors[i];
-        const creditor = creditors[j];
-        const payAmount = Math.min(debtor.amount, creditor.amount);
+        const d = debtors[i];
+        const c = creditors[j];
+        const pay = Math.min(d.amount, c.amount);
 
-        transactions.push({
-          from: debtor.name,
-          to: creditor.name,
-          amount: payAmount,
-        });
+        tx.push({ from: d.name, to: c.name, amount: pay });
 
-        debtor.amount -= payAmount;
-        creditor.amount -= payAmount;
+        d.amount -= pay;
+        c.amount -= pay;
 
-        if (debtor.amount === 0) i++;
-        if (creditor.amount === 0) j++;
+        if (d.amount === 0) i++;
+        if (c.amount === 0) j++;
       }
 
-      setResult(transactions);
-    } catch {
-      message.error("Vui lòng nhập đầy đủ thông tin");
-    }
+      setResult(tx);
+    } catch {}
   };
 
-  // ===== Lưu dữ liệu vào API =====
-const handleSave = async () => {
-  try {
-    setSaving(true);
-    const values = form.getFieldsValue();
-    const dataToSave = {
-      ...values,
-      date: values.date?.toISOString(),
-      participants,
-      splitType,
-      result,
-    };
-    const res = await axios.post(`${API_BASE}/expenses`, dataToSave);
+  // ----- Lưu vào DB -----
+  const handleSave = async () => {
+    try {
+      const values = form.getFieldsValue();
 
-    // 👇 giả sử API trả về expense mới
-    const savedEvent: CalendarEvent = {
-      id: res.data.id,
-      title: values.note || "Chi tiêu mới",
-      start: values.date?.toISOString() || new Date().toISOString(),
-      total: values.amount,
-      categoryId: values.categoryId,
-      note: values.note,
-      teamId: "teamId_demo",
-    };
+      if (!user?.id) return message.error("Bạn chưa đăng nhập");
+      if (!teamId) return message.error("Không tìm thấy team");
 
-    // Gọi callback để SplitPage nhận được
-    onSaved?.(savedEvent);
+      if (!values.date) return message.error("Chọn ngày");
+      if (!values.amount) return message.error("Nhập số tiền");
+      if (!values.categoryId) return message.error("Chọn danh mục");
+      if (!result.length) return message.error("Hãy bấm tính toán trước");
 
-    message.success("Đã lưu hóa đơn thành công!");
-    form.resetFields();
-    setParticipants([]);
-    setResult([]);
-  } catch (err) {
-    console.error(err);
-    message.error("Lỗi khi lưu hóa đơn");
-  } finally {
-    setSaving(false);
-  }
-};
+      const payload: IExpense = {
+        teamId,
+        createdBy: user.id,
+        title: values.note || "Chi tiêu mới",
+        amount: Number(values.amount),
+        category: values.categoryId!,
+        description: values.note,
+        status: "completed",
+        splitMethod: splitType === "equally" ? "equal" : "custom",
+        date: values.date.toISOString(),
+      };
+
+      const expenseRes = await expenseCreate.mutateAsync(payload);
+      const expense = expenseRes.expense;
+      const expenseId: string = String(expense._id ?? expense.id ?? "");
 
 
+      const splitPayload: ISplit = {
+        expenseId,
+        teamId,
+        total: expense.amount,
+        method: splitType === "equally" ? "equal" : "custom",
+        currency: "VND",
+        date: expense.date,
+      };
+
+      await splitCreate.mutateAsync(splitPayload);
+
+      onSaved?.({
+        id: String(expenseId),
+        title: expense.title,
+        start: String(expense.date ?? new Date().toISOString()),
+        total: expense.amount,
+        categoryId: expense.category,
+        note: expense.description,
+        teamId,
+      });
+
+      message.success("Lưu thành công!");
+      form.resetFields();
+      setParticipants([]);
+      setCustomAmounts({});
+      setResult([]);
+    } catch (err) {}
+  };
+
+  const isSaving = expenseCreate.isPending || splitCreate.isPending;
 
   return (
     <ConfigProvider locale={viVN}>
-      <Form<SplitBillFormValues>
+      <Form
         layout="vertical"
         form={form}
         initialValues={{ date: selectedDate }}
       >
         {/* Ngày sự kiện */}
-        <Form.Item
-          name="date"
-          label="Ngày sự kiện"
-          rules={[{ required: true, message: "Chọn ngày sự kiện" }]}
-        >
+        <Form.Item name="date" label="Ngày sự kiện" rules={[{ required: true }]}>
           <DatePicker className="w-full" format="DD/MM/YYYY" />
         </Form.Item>
 
-        {/* Nhập số tiền */}
+        {/* Số tiền */}
         <Form.Item
           name="amount"
           label="Tổng số tiền (VNĐ)"
-          rules={[{ required: true, message: "Vui lòng nhập số tiền" }]}
+          rules={[{ required: true }]}
         >
-          <Input placeholder="Nhập số tiền" type="number" />
+          <Input type="number" placeholder="Nhập số tiền" />
         </Form.Item>
 
         {/* Danh mục */}
         <Form.Item
           name="categoryId"
           label="Danh mục chi tiêu"
-          rules={[{ required: true, message: "Chọn danh mục" }]}
+          rules={[{ required: true }]}
         >
           <Select placeholder="Chọn danh mục">
             {categories.map((c) => (
-              <Select.Option key={c.id} value={c.id}>
+              <Select.Option key={c._id} value={c._id}>
                 <span className="flex items-center gap-2">
                   <span
                     style={{
-                      display: "inline-block",
                       width: 12,
                       height: 12,
                       borderRadius: "50%",
-                      backgroundColor: c.color,
+                      background: c.color,
+                      display: "inline-block",
                     }}
                   />
                   {c.name}
@@ -304,7 +293,7 @@ const handleSave = async () => {
 
         {/* Người tham gia */}
         <Form.Item label="Người tham gia (tối thiểu 2)">
-          <Space.Compact style={{ width: "100%" }} className="mb-2">
+          <Space.Compact className="mb-2" style={{ width: "100%" }}>
             <Form.Item name="participantName" noStyle>
               <Input placeholder="Tên thành viên" />
             </Form.Item>
@@ -320,9 +309,9 @@ const handleSave = async () => {
 
           <Select
             mode="multiple"
-            placeholder="Chọn nhóm để thêm thành viên"
-            style={{ width: "100%" }}
+            placeholder="Chọn nhóm để thêm"
             onChange={addGroups}
+            style={{ width: "100%" }}
           >
             {mockGroups.map((g) => (
               <Select.Option key={g.id} value={g.id}>
@@ -335,9 +324,9 @@ const handleSave = async () => {
             {(showAll ? participants : participants.slice(0, 5)).map((p) => (
               <div
                 key={p}
-                className="flex justify-between items-center py-2 border-b border-gray-200"
+                className="flex justify-between border-b py-2 items-center"
               >
-                <span className="text-gray-700">{p}</span>
+                <span>{p}</span>
                 <Tooltip title="Xóa">
                   <Button
                     type="text"
@@ -348,26 +337,24 @@ const handleSave = async () => {
                 </Tooltip>
               </div>
             ))}
+
             {participants.length > 5 && (
-              <div className="text-center mt-2">
-                <Button
-                  type="link"
-                  size="small"
-                  onClick={() => setShowAll(!showAll)}
-                >
-                  {showAll ? "Thu gọn" : `Xem thêm (${participants.length - 5})`}
-                </Button>
-              </div>
+              <Button
+                type="link"
+                size="small"
+                className="mt-2"
+                onClick={() => setShowAll(!showAll)}
+              >
+                {showAll
+                  ? "Thu gọn"
+                  : `Xem thêm (${participants.length - 5})`}
+              </Button>
             )}
           </div>
         </Form.Item>
 
         {/* Người trả */}
-        <Form.Item
-          name="paidBy"
-          label="Người đã trả"
-          rules={[{ required: true, message: "Chọn người trả tiền" }]}
-        >
+        <Form.Item name="paidBy" label="Người trả" rules={[{ required: true }]}>
           <Select placeholder="Chọn người trả">
             {participants.map((p) => (
               <Select.Option key={p} value={p}>
@@ -379,21 +366,20 @@ const handleSave = async () => {
 
         {/* Cách chia */}
         <Form.Item label="Cách chia" required>
-          <Segmented<SplitType>
+          <Segmented
+            block
             options={[
               { label: "Chia đều", value: "equally" },
               { label: "Chia không đều", value: "unequally" },
             ]}
             value={splitType}
-            onChange={(val) => setSplitType(val)}
-            block
+            onChange={(v) => setSplitType(v as SplitType)}
           />
         </Form.Item>
 
-        {/* Nếu chia không đều */}
+        {/* Tùy chỉnh */}
         {splitType === "unequally" && (
-          <div className="p-3 border rounded bg-gray-50">
-            <h4 className="font-medium mb-2">Nhập số tiền cho từng người:</h4>
+          <div className="p-3 bg-gray-50 border rounded">
             {participants.map((p) => (
               <Form.Item key={p} label={p}>
                 <Input
@@ -414,19 +400,22 @@ const handleSave = async () => {
 
         <Divider />
 
-        {/* Nút tính toán */}
+        {/* Tính toán */}
         <Button type="primary" block onClick={handleCalculate}>
           Tính toán
         </Button>
 
-        {/* Kết quả + Nút lưu */}
+        {/* Kết quả */}
         {result.length > 0 && (
           <div className="mt-4">
             <h4 className="font-semibold mb-2">Kết quả:</h4>
-            {result.map((r, idx) => (
-              <p key={idx}>
+
+            {result.map((r, i) => (
+              <p key={i}>
                 {r.from} → {r.to}:{" "}
-                <Tag color="green">{r.amount.toLocaleString("vi-VN")} VNĐ</Tag>
+                <Tag color="green">
+                  {r.amount.toLocaleString("vi-VN")} VNĐ
+                </Tag>
               </p>
             ))}
 
@@ -434,7 +423,7 @@ const handleSave = async () => {
               type="primary"
               block
               className="mt-3"
-              loading={saving}
+              loading={isSaving}
               onClick={handleSave}
             >
               Lưu

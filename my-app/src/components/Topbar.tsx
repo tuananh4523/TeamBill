@@ -1,18 +1,42 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Bell, LogIn, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { Avatar, Button, Dropdown, MenuProps, Tooltip } from "antd";
 import Link from "next/link";
-import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/context/Settings";
 import AuthModal from "@/components/Modals/AuthModal";
 import Breadcrumb from "@/components/Breadcrumb";
 
+/* ----------------------------------------------
+   FIX HYDRATION MISMATCH
+   Bọc component bằng dynamic ssr:false
+---------------------------------------------- */
+const NoSSR = dynamic(
+  () =>
+    Promise.resolve(
+      ({ children }: { children: React.ReactNode }) => <>{children}</>
+    ),
+  { ssr: false }
+);
+
 export default function Topbar() {
+  return (
+    <NoSSR>
+      <TopbarContent />
+    </NoSSR>
+  );
+}
+
+/* ----------------------------------------------
+   TOPBAR CLIENT-ONLY
+---------------------------------------------- */
+function TopbarContent() {
   const { user, login, logout } = useAuth();
   const { settings, updateSettings } = useSettings();
+
   const [showAuth, setShowAuth] = useState(false);
 
   const items: MenuProps["items"] = [
@@ -37,7 +61,6 @@ export default function Topbar() {
           <Breadcrumb />
         </div>
 
-        {/* Controls bên phải */}
         <div className="flex items-center gap-3">
           {/* Nút đổi theme */}
           <Tooltip
@@ -57,7 +80,8 @@ export default function Topbar() {
               }
               onClick={() =>
                 updateSettings({
-                  theme: settings.theme === "dark" ? "light" : "dark",
+                  theme:
+                    settings.theme === "dark" ? "light" : "dark",
                 })
               }
             />
@@ -104,7 +128,13 @@ export default function Topbar() {
         <AuthModal
           isOpen={showAuth}
           onClose={() => setShowAuth(false)}
-          onLoginSuccess={login}
+          onLoginSuccess={(data) => {
+            if (data.token) {
+              localStorage.setItem("token", data.token);
+            }
+            login(data);
+            setShowAuth(false);
+          }}
         />
       )}
     </>

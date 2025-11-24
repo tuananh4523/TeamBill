@@ -103,7 +103,7 @@ export default function Sidebar({
         />
 
         {/* Ghi chép (có submenu) */}
-        <div>
+        {/* <div>
           <button
             onClick={() => setOpenGhiChep(!openGhiChep)}
             className={clsx(
@@ -140,7 +140,7 @@ export default function Sidebar({
               />
             </div>
           )}
-        </div>
+        </div> */}
 
         <MenuItem
           icon={Users}

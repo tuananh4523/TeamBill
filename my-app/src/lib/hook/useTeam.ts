@@ -18,21 +18,23 @@ export const useUserTeams = () => {
   return useQuery<ITeam[], AxiosError<ApiError>>({
     queryKey: ["userTeams", user?.id],
     enabled: !!user?.id,
-    queryFn: async (): Promise<ITeam[]> => {
-      if (!user?.id) throw new Error("Chưa đăng nhập.");
+    queryFn: async () => {
+      const userId = String(user?.id);
 
-      // 1. Lấy danh sách tất cả nhóm
+      // Lấy tất cả nhóm
       const { data: allTeams } = await API.get<ITeam[]>("/teams");
 
-      // 2. Lọc nhóm user tham gia
-      const userTeams: ITeam[] = [];
+      // Lấy tất cả thành viên theo từng team → chạy song song
+      const membersList = await Promise.all(
+        allTeams.map((team) =>
+          API.get<IMember[]>(`/members/team/${team._id ?? team.id}`)
+        )
+      );
 
-      for (const team of allTeams) {
-        const teamId = team._id || team.id;
-        const { data: members } = await API.get<IMember[]>(`/members/team/${teamId}`);
-        const isMember = members.some((m) => m.userId === user.id);
-        if (isMember) userTeams.push(team);
-      }
+      // Lọc nhóm user đang thuộc về
+      const userTeams = allTeams.filter((team, idx) =>
+        membersList[idx].data.some((m) => m.userId === userId)
+      );
 
       return userTeams;
     },
@@ -46,26 +48,25 @@ export const useUserTeamById = (id?: string) => {
   const { user } = useAuth();
 
   return useQuery<ITeam, AxiosError<ApiError>>({
-    queryKey: ["userTeam", id, user?.id],
+    queryKey: ["userTeam", id],
     enabled: !!id && !!user?.id,
-    queryFn: async (): Promise<ITeam> => {
-      if (!user?.id) throw new Error("Chưa đăng nhập.");
+    queryFn: async () => {
       if (!id) throw new Error("Thiếu mã nhóm.");
+      const userId = String(user?.id);
 
       const { data: team } = await API.get<ITeam>(`/teams/${id}`);
-
-      // Kiểm tra user có trong nhóm không
       const { data: members } = await API.get<IMember[]>(`/members/team/${id}`);
-      const isMember = members.some((m) => m.userId === user.id);
 
-      if (!isMember) throw new Error("Bạn không thuộc nhóm này.");
+      if (!members.some((m) => m.userId === userId))
+        throw new Error("Bạn không thuộc nhóm này.");
+
       return team;
     },
   });
 };
 
 /* ===========================================================
-   TẠO NHÓM MỚI (GẮN USER HIỆN TẠI LÀ NGƯỜI TẠO)
+   TẠO NHÓM (USER LÀ NGƯỜI TẠO)
 =========================================================== */
 export const useUserTeamCreate = () => {
   const { user } = useAuth();
@@ -74,26 +75,47 @@ export const useUserTeamCreate = () => {
   return useMutation<
     { message: string; team: ITeam },
     AxiosError<ApiError>,
-    Omit<ITeam, "_id" | "createdBy">
+    Partial<ITeam>
   >({
-    mutationFn: async (data) => {
-      if (!user?.id) throw new Error("Chưa đăng nhập.");
-      const payload = { ...data, createdBy: user.id };
-      const res = await API.post<{ message: string; team: ITeam }>("/teams", payload);
+    mutationFn: async (payload) => {
+      const userId = String(user?.id);
+
+      // 1) Tạo group
+      const res = await API.post<{ message: string; team: ITeam }>("/teams", {
+        ...payload,
+        createdBy: userId,
+      });
+
+      const team = res.data.team;
+      const teamId = team._id ?? team.id;
+
+      // 2) Tự động thêm thành viên owner
+      await API.post("/members", {
+        teamId,
+        userId,
+        name: user?.username ?? "Người tạo nhóm",
+        email: user?.email ?? "",
+        role: "owner",
+        status: "active",
+      });
+
       return res.data;
     },
-    onSuccess: (res) => {
-      message.success(res.message || "Tạo nhóm thành công");
+
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["userTeams"] });
+      message.success("Tạo nhóm thành công!");
     },
-    onError: (error) => {
-      message.error(error.response?.data?.message || "Không thể tạo nhóm");
+
+    onError: (err) => {
+      message.error(err.response?.data?.message || "Không thể tạo nhóm");
     },
   });
 };
 
+
 /* ===========================================================
-   CẬP NHẬT NHÓM (CHỈ CHO PHÉP USER LÀ NGƯỜI TẠO)
+   CẬP NHẬT NHÓM (CHỈ NGƯỜI TẠO)
 =========================================================== */
 export const useUserTeamUpdate = () => {
   const { user } = useAuth();
@@ -105,54 +127,107 @@ export const useUserTeamUpdate = () => {
     { id: string; data: Partial<ITeam> }
   >({
     mutationFn: async ({ id, data }) => {
-      if (!user?.id) throw new Error("Chưa đăng nhập.");
+      const userId = String(user?.id);
 
-      // Kiểm tra quyền sở hữu nhóm
       const { data: team } = await API.get<ITeam>(`/teams/${id}`);
-      if (team.createdBy !== user.id)
+      if (team.createdBy !== userId)
         throw new Error("Chỉ người tạo mới có quyền cập nhật nhóm này.");
 
-      const res = await API.put<{ message: string; team: ITeam }>(
-        `/teams/${id}`,
-        data
-      );
+      const res = await API.put(`/teams/${id}`, data);
       return res.data;
     },
     onSuccess: (res) => {
-      message.success(res.message || "Cập nhật nhóm thành công");
       qc.invalidateQueries({ queryKey: ["userTeams"] });
-      qc.invalidateQueries({ queryKey: ["userTeam", res.team._id] });
+      qc.invalidateQueries({ queryKey: ["userTeam", res.team._id ?? res.team.id] });
+      message.success("Cập nhật nhóm thành công");
     },
-    onError: (error) => {
-      message.error(error.response?.data?.message || "Không thể cập nhật nhóm");
+    onError: (err) => {
+      message.error(err.response?.data?.message || "Không thể cập nhật nhóm");
     },
   });
 };
 
 /* ===========================================================
-   XÓA NHÓM (CHỈ CHO PHÉP USER LÀ NGƯỜI TẠO)
+   XÓA NHÓM
 =========================================================== */
 export const useUserTeamDelete = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
 
-  return useMutation<{ message: string }, AxiosError<ApiError>, string>({
+  return useMutation<
+    { message: string },
+    AxiosError<ApiError>,
+    string
+  >({
     mutationFn: async (id) => {
-      if (!user?.id) throw new Error("Chưa đăng nhập.");
-
+      const userId = String(user?.id);
       const { data: team } = await API.get<ITeam>(`/teams/${id}`);
-      if (team.createdBy !== user.id)
+
+      if (team.createdBy !== userId)
         throw new Error("Chỉ người tạo mới có quyền xóa nhóm này.");
 
-      const res = await API.delete<{ message: string }>(`/teams/${id}`);
+      const res = await API.delete(`/teams/${id}`);
       return res.data;
     },
     onSuccess: (res) => {
-      message.success(res.message || "Đã xóa nhóm");
       qc.invalidateQueries({ queryKey: ["userTeams"] });
+      message.success(res.message);
     },
-    onError: (error) => {
-      message.error(error.response?.data?.message || "Không thể xóa nhóm");
+    onError: (err) => {
+      message.error(err.response?.data?.message || "Không thể xóa nhóm");
+    },
+  });
+};
+
+/* ===========================================================
+   LẤY THÀNH VIÊN THEO TEAM
+=========================================================== */
+export const useTeamMembers = (teamId?: string) => {
+  return useQuery<IMember[], AxiosError<ApiError>>({
+    queryKey: ["teamMembers", teamId],
+    enabled: !!teamId,
+    queryFn: async () => {
+      const { data } = await API.get(`/members/team/${teamId}`);
+      return data;
+    },
+  });
+};
+
+/* ===========================================================
+   CẬP NHẬT TÊN NHÓM
+=========================================================== */
+export const useTeamRename = () => {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+
+  return useMutation<
+    { message: string; team: ITeam },
+    AxiosError<ApiError>,
+    { id: string; name: string }
+  >({
+    mutationFn: async ({ id, name }) => {
+      const userId = String(user?.id);
+
+      // Kiểm tra quyền
+      const { data: team } = await API.get<ITeam>(`/teams/${id}`);
+      if (team.createdBy !== userId) {
+        throw new Error("Chỉ người tạo mới được sửa tên nhóm.");
+      }
+
+      // Gọi API cập nhật tên
+      const res = await API.put(`/teams/${id}`, { name });
+      return res.data;
+    },
+
+    onSuccess: (res) => {
+      message.success(res.message || "Cập nhật tên nhóm thành công");
+
+      qc.invalidateQueries({ queryKey: ["userTeams"] });
+      qc.invalidateQueries({ queryKey: ["userTeam", res.team._id ?? res.team.id] });
+    },
+
+    onError: (err) => {
+      message.error(err.response?.data?.message || "Không thể cập nhật tên nhóm");
     },
   });
 };

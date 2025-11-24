@@ -455,4 +455,66 @@ export const updateSplit = async (
 export const deleteSplit = (id: string): Promise<AxiosResponse<{ message: string }>> =>
   API.delete(`/splits/${id}`);
 
+/* ===========================================================
+   PAYMENT / VIETQR API
+=========================================================== */
+
+export interface IVietQRDepositRequest {
+  userId: string;
+  amount: number;
+  description?: string;
+}
+
+export interface IVietQRDepositResponse {
+  message: string;
+  qrLink: string;
+  transactionId: string;
+  transCode: string;
+  bankInfo: {
+    bankName: string;
+    holderName: string;
+    accountNumber: string;
+  };
+}
+
+export interface IVietQRConfirmResponse {
+  message: string;
+  wallet: IWallet;
+  transaction: ITransaction;
+}
+
+
+/* ============================
+   Tạo QR nạp tiền ViệtQR
+=============================== */
+export const createVietQRDeposit = async (
+  walletId: string,
+  data: IVietQRDepositRequest
+): Promise<AxiosResponse<IVietQRDepositResponse>> => {
+
+  const res = await API.post(
+    `/payments/wallet/${walletId}/deposit/vietqr`,
+    data
+  );
+  return res;
+};
+
+
+/* ============================
+   Xác nhận đã chuyển khoản
+=============================== */
+export const confirmVietQRDeposit = async (
+  transactionId: string
+): Promise<AxiosResponse<IVietQRConfirmResponse>> => {
+
+  const res = await API.post(`/payments/deposit/${transactionId}/confirm`);
+
+  // Backend trả wallet + transaction → cần normalize
+  res.data.wallet = normalizeId(res.data.wallet);
+  res.data.transaction = normalizeId(res.data.transaction);
+
+  return res;
+};
+
+
 export default API;

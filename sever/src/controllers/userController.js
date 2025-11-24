@@ -4,6 +4,7 @@ import crypto from "crypto";
 import User from "../models/userModel.js";
 import Wallet from "../models/walletModel.js";
 import { userSchema } from "../schema/userSchema.js";
+import { createDefaultCategoriesForUser } from "../controllers/categoryController.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "teamBill_secret";
 
@@ -47,6 +48,8 @@ export const registerUser = async (req, res) => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    
+    await createDefaultCategoriesForUser(newUser._id);
 
     // === Tự động tạo ví cá nhân ===
     const refCode = `WAL-${Date.now().toString(36).toUpperCase()}`;

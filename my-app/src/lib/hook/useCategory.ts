@@ -5,6 +5,7 @@ const KEY = "categories";
 
 export interface Category {
   _id: string;
+  userId: string;
   name: string;
   color: string;
   description?: string;
@@ -12,47 +13,100 @@ export interface Category {
   updatedAt: string;
 }
 
-// Lấy danh sách
-export const useCategories = () =>
+/* ============================================================
+   LẤY DANH MỤC THEO USER
+   GET /categories?userId=xxx
+============================================================ */
+export const useCategories = (userId?: string) =>
   useQuery<Category[]>({
-    queryKey: [KEY],
-    queryFn: async () => (await api.get<Category[]>("/categories")).data,
+    queryKey: [KEY, userId],
+    enabled: !!userId,
+    queryFn: async () =>
+      (await api.get<Category[]>(`/categories?userId=${userId}`)).data,
   });
 
-// Lấy 1 category
-export const useCategory = (id: string) =>
+/* ============================================================
+   LẤY 1 CATEGORY (nếu bạn thêm API GET /categories/:id)
+============================================================ */
+export const useCategory = (id?: string) =>
   useQuery<Category>({
     queryKey: [KEY, id],
-    queryFn: async () => (await api.get<Category>(`/categories/${id}`)).data,
     enabled: !!id,
+    queryFn: async () =>
+      (await api.get<Category>(`/categories/${id}`)).data,
   });
 
-// Tạo mới
+/* ============================================================
+   TẠO CATEGORY
+   POST /categories
+============================================================ */
+export interface CategoryCreateDTO {
+  userId: string;
+  name: string;
+  color: string;
+  description?: string;
+}
+
 export const useCreateCategory = () => {
   const qc = useQueryClient();
-  return useMutation<Category, Error, Omit<Category, "_id" | "createdAt" | "updatedAt">>({
+
+  return useMutation<Category, Error, CategoryCreateDTO>({
     mutationFn: async (data) =>
       (await api.post<Category>("/categories", data)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: [KEY, variables.userId] });
+    },
   });
 };
 
-// Cập nhật
+/* ============================================================
+   CẬP NHẬT CATEGORY
+   PUT /categories/:id
+============================================================ */
+export interface CategoryUpdateDTO {
+  _id: string;
+  userId: string;
+  name?: string;
+  color?: string;
+  description?: string;
+}
+
 export const useUpdateCategory = () => {
   const qc = useQueryClient();
-  return useMutation<Category, Error, Category>({
+
+  return useMutation<Category, Error, CategoryUpdateDTO>({
     mutationFn: async (data) =>
-      (await api.put<Category>(`/categories/${data._id}`, data)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+      (
+        await api.put<Category>(`/categories/${data._id}`, {
+          name: data.name,
+          color: data.color,
+          description: data.description,
+          userId: data.userId,
+        })
+      ).data,
+
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [KEY, vars.userId] });
+    },
   });
 };
 
-// Xóa
+/* ============================================================
+   XÓA CATEGORY
+   DELETE /categories/:id
+============================================================ */
 export const useDeleteCategory = () => {
   const qc = useQueryClient();
-  return useMutation<{ message: string }, Error, string>({
-    mutationFn: async (id) =>
-      (await api.delete<{ message: string }>(`/categories/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
-  });
+
+  return useMutation<{ message: string }, Error, { id: string; userId: string }>(
+    {
+      mutationFn: async ({ id }) =>
+        (await api.delete<{ message: string }>(`/categories/${id}`)).data,
+
+      onSuccess: (_, vars) => {
+        qc.invalidateQueries({ queryKey: [KEY, vars.userId] });
+      },
+    }
+  );
 };
