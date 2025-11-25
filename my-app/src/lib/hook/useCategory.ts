@@ -1,44 +1,47 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../apiClient";
+import {
+  getCategories,
+  getCategoryById,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  ICategory,
+} from "@/lib/api";
 
 const KEY = "categories";
 
-export interface Category {
-  _id: string;
-  userId: string;
-  name: string;
-  color: string;
-  description?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 /* ============================================================
-   LẤY DANH MỤC THEO USER
-   GET /categories?userId=xxx
+   1) GET CATEGORY LIST BY USER (array trực tiếp)
 ============================================================ */
 export const useCategories = (userId?: string) =>
-  useQuery<Category[]>({
+  useQuery<ICategory[]>({
     queryKey: [KEY, userId],
     enabled: !!userId,
-    queryFn: async () =>
-      (await api.get<Category[]>(`/categories?userId=${userId}`)).data,
+
+    queryFn: async () => {
+      const res = await getCategories(userId!);
+
+      // backend trả về array trực tiếp
+      return Array.isArray(res.data) ? res.data : [];
+    },
   });
 
 /* ============================================================
-   LẤY 1 CATEGORY (nếu bạn thêm API GET /categories/:id)
+   2) GET CATEGORY BY ID (object trực tiếp)
 ============================================================ */
 export const useCategory = (id?: string) =>
-  useQuery<Category>({
+  useQuery<ICategory>({
     queryKey: [KEY, id],
     enabled: !!id,
-    queryFn: async () =>
-      (await api.get<Category>(`/categories/${id}`)).data,
+
+    queryFn: async () => {
+      const res = await getCategoryById(id!);
+      return res.data;
+    },
   });
 
 /* ============================================================
-   TẠO CATEGORY
-   POST /categories
+   3) CREATE CATEGORY
 ============================================================ */
 export interface CategoryCreateDTO {
   userId: string;
@@ -50,19 +53,20 @@ export interface CategoryCreateDTO {
 export const useCreateCategory = () => {
   const qc = useQueryClient();
 
-  return useMutation<Category, Error, CategoryCreateDTO>({
-    mutationFn: async (data) =>
-      (await api.post<Category>("/categories", data)).data,
+  return useMutation<ICategory, Error, CategoryCreateDTO>({
+    mutationFn: async (dto) => {
+      const res = await createCategory(dto);
+      return res.data.category; // backend trả { category }
+    },
 
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: [KEY, variables.userId] });
+    onSuccess: (_, dto) => {
+      qc.invalidateQueries({ queryKey: [KEY, dto.userId] });
     },
   });
 };
 
 /* ============================================================
-   CẬP NHẬT CATEGORY
-   PUT /categories/:id
+   4) UPDATE CATEGORY
 ============================================================ */
 export interface CategoryUpdateDTO {
   _id: string;
@@ -75,38 +79,44 @@ export interface CategoryUpdateDTO {
 export const useUpdateCategory = () => {
   const qc = useQueryClient();
 
-  return useMutation<Category, Error, CategoryUpdateDTO>({
-    mutationFn: async (data) =>
-      (
-        await api.put<Category>(`/categories/${data._id}`, {
-          name: data.name,
-          color: data.color,
-          description: data.description,
-          userId: data.userId,
-        })
-      ).data,
+  return useMutation<ICategory, Error, CategoryUpdateDTO>({
+    mutationFn: async (dto) => {
+      const res = await updateCategory(dto._id, {
+        name: dto.name,
+        color: dto.color,
+        description: dto.description,
+        userId: dto.userId,
+      });
 
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: [KEY, vars.userId] });
+      return res.data.category;
+    },
+
+    onSuccess: (_, dto) => {
+      qc.invalidateQueries({ queryKey: [KEY, dto.userId] });
+      qc.invalidateQueries({ queryKey: [KEY, dto._id] });
     },
   });
 };
 
 /* ============================================================
-   XÓA CATEGORY
-   DELETE /categories/:id
+   5) DELETE CATEGORY
 ============================================================ */
+export interface CategoryDeleteVars {
+  id: string;
+  userId: string;
+}
+
 export const useDeleteCategory = () => {
   const qc = useQueryClient();
 
-  return useMutation<{ message: string }, Error, { id: string; userId: string }>(
-    {
-      mutationFn: async ({ id }) =>
-        (await api.delete<{ message: string }>(`/categories/${id}`)).data,
+  return useMutation<{ message: string }, Error, CategoryDeleteVars>({
+    mutationFn: async ({ id }) => {
+      const res = await deleteCategory(id);
+      return res.data; 
+    },
 
-      onSuccess: (_, vars) => {
-        qc.invalidateQueries({ queryKey: [KEY, vars.userId] });
-      },
-    }
-  );
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: [KEY, vars.userId] });
+    },
+  });
 };

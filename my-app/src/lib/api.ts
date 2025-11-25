@@ -456,6 +456,59 @@ export const deleteSplit = (id: string): Promise<AxiosResponse<{ message: string
   API.delete(`/splits/${id}`);
 
 /* ===========================================================
+   SPLIT MEMBER API
+=========================================================== */
+
+export interface ISplitMember {
+  id?: string;
+  _id?: string;
+  splitId: string;
+  memberId: string;
+  amount: number;
+  percentage?: number;
+  note?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const createSplitMember = async (
+  data: ISplitMember
+): Promise<AxiosResponse<{ message: string; splitMember: ISplitMember }>> => {
+  const res = await API.post("/split-members", data);
+  res.data.splitMember = normalizeId(res.data.splitMember);
+  return res;
+};
+
+export const getSplitMembersBySplit = async (
+  splitId: string
+): Promise<AxiosResponse<ISplitMember[]>> => {
+  const res = await API.get(`/split-members/split/${splitId}`);
+  res.data = normalizeArray(res.data);
+  return res;
+};
+
+export const getSplitMemberById = async (
+  id: string
+): Promise<AxiosResponse<ISplitMember>> => {
+  const res = await API.get(`/split-members/${id}`);
+  res.data = normalizeId(res.data);
+  return res;
+};
+
+export const updateSplitMember = async (
+  id: string,
+  data: Partial<ISplitMember>
+): Promise<AxiosResponse<{ message: string; splitMember: ISplitMember }>> => {
+  const res = await API.put(`/split-members/${id}`, data);
+  res.data.splitMember = normalizeId(res.data.splitMember);
+  return res;
+};
+
+export const deleteSplitMember = (
+  id: string
+): Promise<AxiosResponse<{ message: string }>> => API.delete(`/split-members/${id}`);
+
+/* ===========================================================
    PAYMENT / VIETQR API
 =========================================================== */
 
@@ -515,6 +568,73 @@ export const confirmVietQRDeposit = async (
 
   return res;
 };
+
+/* ===========================================================
+   CATEGORY API 
+=========================================================== */
+
+export interface ICategory {
+  id: string;           
+  _id?: string;
+  userId: string;
+  name: string;
+  color: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/* Lấy categories theo userId  */
+export const getCategories = async (
+  userId: string
+): Promise<AxiosResponse<ICategory[]>> => {
+  const res = await API.get("/categories", {
+    params: { userId },
+  });
+
+  // Normalize _id -> id
+  res.data = normalizeArray(res.data);
+
+  return res;
+};
+
+/* Lấy chi tiết category */
+export const getCategoryById = async (
+  id: string
+): Promise<AxiosResponse<ICategory>> => {
+  const res = await API.get(`/categories/${id}`);
+
+  res.data = normalizeId(res.data);
+
+  return res;
+};
+
+/* POST /categories  */
+export const createCategory = async (
+  data: Partial<ICategory>
+): Promise<AxiosResponse<{ message: string; category: ICategory }>> => {
+  const res = await API.post("/categories", data);
+
+  res.data.category = normalizeId(res.data.category);
+
+  return res;
+};
+
+/* PUT /categories/:id  */
+export const updateCategory = async (
+  id: string,
+  data: Partial<ICategory>
+): Promise<AxiosResponse<{ message: string; category: ICategory }>> => {
+  const res = await API.put(`/categories/${id}`, data);
+
+  res.data.category = normalizeId(res.data.category);
+
+  return res;
+};
+
+/* DELETE /categories/:id  */
+export const deleteCategory = (id: string) =>
+  API.delete<{ message: string }>(`/categories/${id}`);
 
 
 export default API;
