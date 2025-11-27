@@ -41,3 +41,15 @@
 |                 | `GET`    | `/api/split-members/:id`             | Lấy chi tiết 1 bản chia           |
 |                 | `PUT`    | `/api/split-members/:id`             | Cập nhật chia tiền thành viên     |
 |                 | `DELETE` | `/api/split-members/:id`             | Xóa bản ghi chia tiền             |
+| **Category**    | `POST`   | `/api/categories`                    | Tạo danh mục mới                  |
+|                 | `GET`    | `/api/categories/user/:userId`       | Lấy danh mục theo người dùng      |
+|                 | `GET`    | `/api/categories/:id`                | Lấy chi tiết danh mục             |
+|                 | `PUT`    | `/api/categories/:id`                | Cập nhật danh mục                 |
+|                 | `DELETE` | `/api/categories/:id`                | Xóa danh mục                      |
+| **Payment**     | `POST`   | `/api/payments`                      | Tạo phương thức thanh toán mới    |
+|                 | `GET`    | `/api/payments/user/:userId`         | Lấy phương thức thanh toán theo   |
+|                 |          |                                      |   người dùng                      |
+|                 | `GET`    | `/api/payments/:id`                  | Lấy chi tiết phương thức thanh    |
+|                 |          |                                      | toán                              |
+|                 | `PUT`    | `/api/payments/:id`                  | Cập nhật phương thức thanh toán   |
+|                 | `DELETE` | `/api/payments/:id`                  | Xóa phương thức thanh toán        |
