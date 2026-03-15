@@ -24,19 +24,19 @@ import {
 } from "antd";
 import viVN from "antd/es/locale/vi_VN";
 import { Upload, Copy, RefreshCcw, Filter } from "lucide-react";
+import { EyeOutlined, EyeInvisibleOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/vi";
 import copy from "copy-to-clipboard";
 import type { ColumnsType } from "antd/es/table";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGetWalletsQuery, useGetTransactionsByWallet } from "@/hooks/api";
 import {
-  getTransactionsByWallet,
-  IWallet,
-  ITransaction,
-  createVietQRDeposit,
-  confirmVietQRDeposit,
-} from "@/lib/api";
+  useCreateVietQRDeposit,
+  useConfirmDeposit,
+} from "@/hooks/api/usePayments/usePayments";
+import type { Wallet, Transaction } from "@/types";
 import { useAuth } from "@/context/AuthContext";
-import { useUserWallet } from "@/lib/hook";
 
 dayjs.locale("vi");
 const { Title, Text } = Typography;
@@ -47,7 +47,7 @@ const { Option } = Select;
 const formatCurrency = (num: number): string =>
   new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(num);
 
-/* ================== Component dòng thông tin ================== */
+// Component dòng thông tin
 function InfoRow({
   label,
   value,
@@ -80,8 +80,30 @@ function InfoRow({
   );
 }
 
-/* ================== Thẻ Ví ================== */
-function WalletCard({ balance, owner }: { balance: number; owner: string }) {
+// Thẻ Ví
+function usePrimaryWallet(
+  wallets: Wallet[] | undefined,
+  userId: string | undefined,
+) {
+  return useMemo(() => {
+    if (!wallets?.length) return undefined;
+    if (userId) {
+      const mine = wallets.find((w) => String(w.userId) === String(userId));
+      if (mine) return mine;
+    }
+    return wallets[0];
+  }, [wallets, userId]);
+}
+
+function WalletCard({
+  balance,
+  owner,
+  showBalance,
+}: {
+  balance: number;
+  owner: string;
+  showBalance: boolean;
+}) {
   return (
     <div
       style={{
@@ -117,7 +139,9 @@ function WalletCard({ balance, owner }: { balance: number; owner: string }) {
       </div>
 
       <div className="text-center">
-        <span className="text-3xl font-bold">{formatCurrency(balance)}</span>
+        <span className="text-3xl font-bold">
+          {showBalance ? formatCurrency(balance) : "***"}
+        </span>
         <span className="ml-1 text-base">₫</span>
         <div className="text-sm opacity-80 mt-1">Số dư khả dụng</div>
       </div>
@@ -130,19 +154,26 @@ function WalletCard({ balance, owner }: { balance: number; owner: string }) {
   );
 }
 
-/* ================== Trang chính ================== */
+// Trang chính
 export default function WalletPage() {
   const { user, loading: authLoading } = useAuth();
-  const {
-    data: walletRes,
-    isLoading: walletLoading,
-    refetch,
-  } = useUserWallet();
-  const wallet: IWallet | undefined = walletRes?.data;
+  const queryClient = useQueryClient();
+  const { data: wallets = [], isLoading: loadingWallets } =
+    useGetWalletsQuery();
+  const primaryWallet = usePrimaryWallet(wallets, user?.id);
+  const walletId = primaryWallet?._id ?? "";
 
-  const [transactions, setTransactions] = useState<ITransaction[]>([]);
-  const [filteredTx, setFilteredTx] = useState<ITransaction[]>([]);
-  const [loadingTx, setLoadingTx] = useState(false);
+  useEffect(() => {
+    if (walletId) {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    }
+  }, [walletId, queryClient]);
+
+  const { data: transactions = [], isLoading: loadingTransactions } =
+    useGetTransactionsByWallet(walletId);
+  const [showBalance, setShowBalance] = useState(true);
+
+  const [filteredTx, setFilteredTx] = useState<Transaction[]>([]);
   const [dateRange, setDateRange] = useState<
     [dayjs.Dayjs | null, dayjs.Dayjs | null]
   >([null, null]);
@@ -151,7 +182,6 @@ export default function WalletPage() {
   // ====== STATE NẠP TIỀN VNPAY ======
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState<number | null>(null);
-  const [depositLoading, setDepositLoading] = useState(false);
   // ====== STATE QUẢN LÝ QR VIETQR ======
   const [qrInfo, setQrInfo] = useState<{
     qrLink: string;
@@ -164,52 +194,27 @@ export default function WalletPage() {
     };
   } | null>(null);
 
-  /* ===========================================================
-     HÀM TẢI DANH SÁCH GIAO DỊCH
-  ============================================================ */
-  const fetchTransactions = useCallback(async (): Promise<void> => {
-    if (!wallet?._id && !wallet?.id) return;
-    setLoadingTx(true);
-    try {
-      const walletId = wallet.id || wallet._id || "";
-      const { data } = await getTransactionsByWallet(walletId);
-      setTransactions(data || []);
-      setFilteredTx(data || []);
-      console.groupCollapsed("=== [WalletPage] DỮ LIỆU VÍ ===");
-      console.log("Danh sách giao dịch:", data);
-      console.groupEnd();
-    } catch (err) {
-      console.error("[WalletPage] Lỗi tải giao dịch:", err);
-      message.error("Không thể tải danh sách giao dịch.");
-    } finally {
-      setLoadingTx(false);
-    }
-  }, [wallet]);
-
-  useEffect(() => {
-    if (wallet) void fetchTransactions();
-  }, [wallet, fetchTransactions]);
-
-  /* ===========================================================
-     HÀM LỌC GIAO DỊCH
-  ============================================================ */
+  // Transactions handled by React Query hook
   const handleFilter = useCallback(() => {
     let filtered = [...transactions];
 
     // Lọc theo ngày
-    if (dateRange[0] && dateRange[1]) {
+    if (dateRange[0] || dateRange[1]) {
       filtered = filtered.filter((tx) => {
-        const txDate = dayjs(tx.date);
+        if (!tx.createdAt) return false;
+        const txDate = dayjs(tx.createdAt);
         return (
-          txDate.isAfter(dateRange[0], "day") &&
-          txDate.isBefore(dateRange[1], "day")
+          (!dateRange[0] || !txDate.isBefore(dateRange[0]!, "day")) &&
+          (!dateRange[1] || !txDate.isAfter(dateRange[1]!, "day"))
         );
       });
     }
 
     // Lọc theo trạng thái
     if (statusFilter !== "all") {
-      filtered = filtered.filter((tx) => tx.status === statusFilter);
+      filtered = filtered.filter(
+        (tx) => (tx.status ?? "pending").toLowerCase() === statusFilter,
+      );
     }
 
     setFilteredTx(filtered);
@@ -219,61 +224,50 @@ export default function WalletPage() {
     handleFilter();
   }, [dateRange, statusFilter, transactions, handleFilter]);
 
-  /* ===========================================================
-   HÀM TẠO QR NẠP TIỀN VIETQR
-=========================================================== */
-  const handleCreateVietQR = useCallback(async () => {
-    if (!wallet || !user) {
-      message.error("Không tìm thấy thông tin ví hoặc người dùng.");
+  const createVietQRMu = useCreateVietQRDeposit();
+  const confirmMu = useConfirmDeposit();
+
+  const handleCreateVietQR = useCallback(() => {
+    if (!primaryWallet || !user || !depositAmount || depositAmount <= 0) {
+      message.warning("Vui lòng chọn ví và nhập số tiền hợp lệ.");
       return;
     }
 
-    if (!depositAmount || depositAmount <= 0) {
-      message.warning("Vui lòng nhập số tiền nạp hợp lệ.");
-      return;
-    }
+    const userId = user!.id;
+    createVietQRMu.mutate(
+      {
+        walletId: primaryWallet._id!,
+        data: {
+          amount: depositAmount,
+          userId,
+        },
+      },
+      {
+        onSuccess: (data) => {
+          if (data.qrLink) {
+            setQrInfo({
+              qrLink: data.qrLink,
+              transactionId: data.transactionId,
+              transCode: data.transCode,
+              bankInfo: data.bankInfo,
+            });
+            message.success("Tạo mã QR thành công!");
+          }
+        },
+        onError: (error) => {
+          console.error("[WalletPage] Lỗi tạo QR:", error);
+          message.error("Không tạo được QR.");
+        },
+      },
+    );
+  }, [primaryWallet, user, depositAmount, createVietQRMu]);
 
-    try {
-      setDepositLoading(true);
-
-      const userId = user.id ?? (user as { _id?: string })._id ?? "";
-      const walletId = wallet.id ?? (wallet as { _id?: string })._id ?? "";
-
-      const res = await createVietQRDeposit(walletId, {
-        amount: depositAmount,
-        userId,
-      });
-
-      if (!res.data?.qrLink) {
-        throw new Error("Server không trả về QR ViệtQR.");
-      }
-
-      // Mở modal hiển thị QR
-      setQrInfo({
-        qrLink: res.data.qrLink,
-        transactionId: res.data.transactionId,
-        transCode: res.data.transCode,
-        bankInfo: res.data.bankInfo,
-      });
-
-      message.success("Tạo mã QR thành công, vui lòng quét để nạp tiền.");
-    } catch (error) {
-      console.error("[WalletPage] Lỗi tạo QR ViệtQR:", error);
-      message.error("Không tạo được QR ViệtQR.");
-    } finally {
-      setDepositLoading(false);
-    }
-  }, [depositAmount, wallet, user]);
-
-  /* ===========================================================
-     CẤU HÌNH CỘT BẢNG
-  ============================================================ */
-  const columns: ColumnsType<ITransaction> = useMemo(
+  const columns: ColumnsType<Transaction> = useMemo(
     () => [
       { title: "Mã giao dịch", dataIndex: "code", align: "center" },
       {
         title: "Thời gian",
-        dataIndex: "date",
+        dataIndex: "createdAt",
         align: "center",
         render: (v: string) => (v ? dayjs(v).format("HH:mm DD/MM/YYYY") : "-"),
       },
@@ -281,26 +275,26 @@ export default function WalletPage() {
         title: "Loại",
         dataIndex: "type",
         align: "center",
-        render: (t: ITransaction["type"]) => (
+        render: (t: Transaction["type"]) => (
           <Tag
             color={
               t === "deposit"
                 ? "green"
                 : t === "withdraw"
-                ? "volcano"
-                : t === "payment"
-                ? "blue"
-                : "gold"
+                  ? "volcano"
+                  : t === "payment"
+                    ? "blue"
+                    : "gold"
             }
             style={{ borderRadius: 6, fontWeight: 500, padding: "2px 10px" }}
           >
             {t === "deposit"
               ? "Nạp tiền"
               : t === "withdraw"
-              ? "Rút tiền"
-              : t === "payment"
-              ? "Thanh toán"
-              : "Chuyển ví"}
+                ? "Rút tiền"
+                : t === "payment"
+                  ? "Thanh toán"
+                  : "Chuyển ví"}
           </Tag>
         ),
       },
@@ -308,7 +302,7 @@ export default function WalletPage() {
         title: "Số tiền (₫)",
         dataIndex: "amount",
         align: "right",
-        render: (v: number, r: ITransaction) => (
+        render: (v: number, r: Transaction) => (
           <Text
             strong
             type={r.direction === "out" ? "danger" : "success"}
@@ -323,24 +317,26 @@ export default function WalletPage() {
         title: "Trạng thái",
         dataIndex: "status",
         align: "center",
-        render: (s: ITransaction["status"]) => (
-          <Tag
-            color={
-              s === "completed"
-                ? "success"
-                : s === "pending"
-                ? "processing"
-                : "error"
-            }
-            style={{ borderRadius: 6, padding: "2px 10px" }}
-          >
-            {s === "completed"
-              ? "Thành công"
-              : s === "pending"
-              ? "Đang xử lý"
-              : "Thất bại"}
-          </Tag>
-        ),
+        render: (s?: string) => {
+          const status = (s ?? "pending").toLowerCase();
+          const colors = {
+            completed: "success",
+            pending: "processing",
+            failed: "error" as const,
+          };
+          const color = colors[status as keyof typeof colors] || "default";
+          const labels = {
+            completed: "Thành công",
+            pending: "Đang xử lý",
+            failed: "Thất bại",
+          };
+          const label = labels[status as keyof typeof labels] || "Không rõ";
+          return (
+            <Tag color={color} style={{ borderRadius: 6, padding: "2px 10px" }}>
+              {label}
+            </Tag>
+          );
+        },
       },
       {
         title: "Mô tả",
@@ -349,16 +345,20 @@ export default function WalletPage() {
         render: (v?: string) => v || "-",
       },
     ],
-    []
+    [],
   );
 
-  /* ===========================================================
-     GIAO DIỆN
-  ============================================================ */
-  if (authLoading || walletLoading)
+  const loading = authLoading || loadingWallets || loadingTransactions;
+
+  if (loading)
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Spin tip="Đang tải dữ liệu ví..." />
+      <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+        <div className="text-center">
+          <Spin size="large" />
+          <div className="mt-4 text-xl font-medium text-gray-600">
+            Đang tải dữ liệu ví...
+          </div>
+        </div>
       </div>
     );
 
@@ -369,7 +369,7 @@ export default function WalletPage() {
       </div>
     );
 
-  if (!wallet)
+  if (!primaryWallet)
     return (
       <div className="flex flex-col justify-center items-center min-h-screen text-gray-600">
         <Title level={4}>Không tìm thấy ví của bạn.</Title>
@@ -383,7 +383,13 @@ export default function WalletPage() {
           <Title level={3} className="!ml-1">
             Ví Team Bill
           </Title>
-          <Button icon={<RefreshCcw size={16} />} onClick={() => refetch()}>
+          <Button
+            icon={<RefreshCcw size={16} />}
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["wallets"] });
+              queryClient.invalidateQueries({ queryKey: ["transactions"] });
+            }}
+          >
             Làm mới
           </Button>
         </Row>
@@ -446,14 +452,16 @@ export default function WalletPage() {
                   <div style={{ fontWeight: 500, marginBottom: 10 }}>
                     Tổng tiền:{" "}
                     <span style={{ fontWeight: 700 }}>
-                      {formatCurrency(wallet.balance)} ₫
+                      {showBalance
+                        ? formatCurrency(primaryWallet.balance ?? 0)
+                        : "*** ₫"}
                     </span>
                   </div>
 
                   <Table
                     bordered
                     rowKey="id"
-                    loading={loadingTx}
+                    loading={loadingTransactions}
                     columns={columns}
                     dataSource={filteredTx}
                     pagination={{
@@ -470,9 +478,17 @@ export default function WalletPage() {
 
           {/* THẺ VÍ */}
           <Col xs={24} md={8}>
+            <Space style={{ marginBottom: 8 }}>
+              <Button
+                shape="circle"
+                icon={showBalance ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                onClick={() => setShowBalance(!showBalance)}
+              />
+            </Space>
             <WalletCard
-              balance={wallet.balance}
-              owner={wallet.bankAccount_holderName || "—"}
+              balance={primaryWallet.balance ?? 0}
+              owner={primaryWallet.bankAccount_holderName || "—"}
+              showBalance={showBalance}
             />
 
             <Card className="mt-4">
@@ -484,41 +500,41 @@ export default function WalletPage() {
                 >
                   Nạp tiền
                 </Button>
-                <Button danger>Rút tiền</Button>
+                <Button danger disabled>
+                  Rút tiền (sắp có)
+                </Button>
               </Space>
 
               <Divider />
               <Title level={5}>Thông tin chuyển khoản</Title>
               <InfoRow
                 label="Chủ TK"
-                value={wallet.bankAccount_holderName || "—"}
+                value={primaryWallet.bankAccount_holderName || "—"}
               />
               <InfoRow
                 label="Số TK"
-                value={wallet.bankAccount_number || "—"}
+                value={primaryWallet.bankAccount_number || "—"}
                 copyable
               />
               <InfoRow
                 label="Ngân hàng"
-                value={wallet.bankAccount_bankName || "—"}
+                value={primaryWallet.bankAccount_bankName || "—"}
               />
               <Text type="secondary">
-                Nội dung: <Text code>NAP {wallet.refCode}</Text>
+                Nội dung: <Text code>NAP {primaryWallet.refCode}</Text>
               </Text>
             </Card>
           </Col>
         </Row>
 
-        {/* MODAL NẠP TIỀN VIỆTQR */}
         <Modal
           title="Nạp tiền vào ví qua ViệtQR"
           open={depositModalOpen}
           onCancel={() => {
-            if (!depositLoading) {
-              setDepositModalOpen(false);
-              setQrInfo(null);
-              setDepositAmount(null);
-            }
+            if (createVietQRMu.isPending || confirmMu.isPending) return;
+            setDepositModalOpen(false);
+            setQrInfo(null);
+            setDepositAmount(null);
           }}
           footer={null}
         >
@@ -549,7 +565,8 @@ export default function WalletPage() {
               <Button
                 type="primary"
                 block
-                loading={depositLoading}
+                loading={createVietQRMu.isPending}
+                disabled={!depositAmount || depositAmount! <= 0}
                 onClick={handleCreateVietQR}
               >
                 Tạo mã QR ViệtQR
@@ -586,25 +603,6 @@ export default function WalletPage() {
                 <Text strong>Nội dung: </Text>
                 <Text code>{qrInfo.transCode}</Text>
               </div>
-
-              <Button
-                type="primary"
-                block
-                onClick={async () => {
-                  try {
-                    message.loading("Đang xác nhận...", 1);
-                    await confirmVietQRDeposit(qrInfo.transactionId);
-                    message.success("Xác nhận nạp tiền thành công!");
-                    setDepositModalOpen(false);
-                    setQrInfo(null);
-                    refetch(); // cập nhật lại ví
-                  } catch {
-                    message.error("Không thể xác nhận giao dịch.");
-                  }
-                }}
-              >
-                Tôi đã chuyển khoản
-              </Button>
 
               <Button
                 block

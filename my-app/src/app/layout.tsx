@@ -1,18 +1,22 @@
 "use client";
 
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import "@/styles/globals.css";
 import Providers from "./providers";
 import { AuthProvider } from "@/context/AuthContext";
-import Sidebar from "@/components/Sidebar";
-import Topbar from "@/components/Topbar";
-import Footer from "@/components/Footer";
+import Sidebar from "@/components/layout/Sidebar";
+import Topbar from "@/components/layout/Topbar";
+import Footer from "@/components/layout/Footer";
 import clsx from "clsx";
 import { useState } from "react";
 import { ConfigProvider } from "antd";
 import viVN from "antd/es/locale/vi_VN";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
@@ -38,7 +42,6 @@ export default function RootLayout({
           <ConfigProvider locale={viVN}>
             <AuthProvider>
               <div className="flex h-screen overflow-hidden">
-                {/* ===== SIDEBAR ===== */}
                 <aside
                   className={clsx(
                     "border-r border-gray-200 shadow-sm flex-shrink-0 flex flex-col bg-white transition-all duration-300",
@@ -48,27 +51,13 @@ export default function RootLayout({
                   <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
                 </aside>
 
-                {/* ===== MAIN CONTENT AREA ===== */}
-                <div
-                  className={clsx(
-                    "flex flex-col flex-1 min-h-0 bg-[#F7FBFF] transition-all duration-300"
-                  )}
-                >
-                  {/* ===== TOPBAR ===== */}
-                  <header
-                    className={clsx(
-                      "sticky top-0 z-30 flex items-center justify-between h-[64px] bg-[#DFF2FD] pr-10 pl-6"
-                    )}
-                  >
+                <div className="flex flex-col flex-1 min-h-0 bg-[#F7FBFF] transition-all duration-300">
+                  <header className="sticky top-0 z-30 flex items-center justify-between h-[64px] bg-[#DFF2FD] pr-10 pl-6">
                     <Topbar />
                   </header>
 
-                  {/* ===== PAGE CONTENT ===== */}
                   <main
-                    className={clsx(
-                      "flex-1 overflow-y-auto px-0 py-6 text-gray-900",
-                      "bg-[#DFF2FD]"
-                    )}
+                    className="flex-1 overflow-y-auto px-0 py-6 text-gray-900 bg-[#DFF2FD]"
                     style={{
                       transition: "all 0.3s ease-in-out",
                       marginLeft: collapsed ? "0" : "0",
@@ -77,14 +66,7 @@ export default function RootLayout({
                     {children}
                   </main>
 
-                  {/* ===== FOOTER ===== */}
-                  <footer
-                    className={clsx(
-                      "h-[34px] bg-white border-t border-gray-200 shadow-sm",
-                      "flex items-center justify-center text-sm text-gray-600",
-                      "transition-all duration-300"
-                    )}
-                  >
+                  <footer className="h-[34px] bg-white border-t border-gray-200 shadow-sm flex items-center justify-center text-sm text-gray-600">
                     <Footer />
                   </footer>
                 </div>

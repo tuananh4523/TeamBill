@@ -41,3 +41,148 @@
 |                 | `GET`    | `/api/split-members/:id`             | Lấy chi tiết 1 bản chia           |
 |                 | `PUT`    | `/api/split-members/:id`             | Cập nhật chia tiền thành viên     |
 |                 | `DELETE` | `/api/split-members/:id`             | Xóa bản ghi chia tiền             |
+1. Auth Hooks
+
+    File: useAuth.tsx
+
+    Dùng cho xác thực người dùng.
+
+    useSignin → đăng nhập
+
+    useSignup → đăng ký
+
+2. User Hooks
+
+    File: useUsers.tsx
+
+    Quản lý người dùng trong hệ thống.
+
+    useGetUsers → lấy danh sách user
+
+    useGetUser → lấy chi tiết user
+
+    useUpdateUser → cập nhật user
+
+    useDeleteUser → xoá user
+
+3. Team Hooks
+
+        File: useTeams.tsx
+
+        Quản lý team.
+
+        useGetTeams → lấy danh sách team
+
+        useGetTeam → lấy chi tiết team
+
+        useCreateTeam → tạo team
+
+        useUpdateTeam → cập nhật team
+
+        useDeleteTeam → xoá team
+
+4. Member Hooks
+
+    File: useMembers.tsx
+
+    Quản lý thành viên trong team.
+
+    useGetMembersByTeam → lấy member theo team
+
+    useGetMember → lấy chi tiết member
+
+    useCreateMember → thêm member
+
+    useUpdateMember → cập nhật member
+
+    useDeleteMember → xoá member
+
+5. Wallet Hooks
+
+    File: useWallets.tsx
+
+    Quản lý ví tiền.
+
+    useGetWallets → lấy danh sách ví
+
+    useGetWallet → lấy chi tiết ví
+
+    useCreateWallet → tạo ví
+
+    useUpdateWallet → cập nhật ví
+
+    useDeleteWallet → xoá ví
+
+6. Category Hooks
+
+    File: useCategories.ts
+
+    Quản lý danh mục chi tiêu.
+
+    useGetCategories → lấy danh mục
+
+    useCreateCategory → tạo danh mục
+
+    useUpdateCategory → cập nhật danh mục
+
+    useDeleteCategory → xoá danh mục
+
+7. Expense Hooks
+
+    File: useExpense.ts
+
+    Quản lý khoản chi.
+
+    useGetExpensesByTeam → lấy expense theo team
+
+    useGetExpense → lấy chi tiết expense
+
+    useCreateExpense → tạo expense
+
+    useUpdateExpense → cập nhật expense
+
+    useDeleteExpense → xoá expense
+
+8. Split Hooks
+
+    File: useSplits.tsx
+
+    Chia tiền trong expense.
+
+    useGetSplitsByTeam → lấy split theo team
+
+    useGetSplitByExpense → lấy split theo expense
+
+    useGetSplit → lấy chi tiết split
+
+    useCreateSplit → tạo split
+
+    useUpdateSplit → cập nhật split
+
+    useDeleteSplit → xoá split
+
+9. Transaction Hooks
+
+    File: useTransactions.tsx
+
+    Quản lý giao dịch.
+
+    useGetTransactionsByWallet → lấy transaction theo wallet
+
+    useGetTransaction → lấy chi tiết transaction
+
+    useCreateTransaction → tạo transaction
+
+    useUpdateTransaction → cập nhật transaction
+
+    useDeleteTransaction → xoá transaction
+
+10. Payment Hooks
+
+    File: usePayments.tsx
+
+    Xử lý nạp tiền.
+
+    useCreateVietQRDeposit → tạo QR nạp tiền
+
+    useConfirmDeposit → xác nhận nạp tiền
