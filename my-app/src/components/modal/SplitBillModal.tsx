@@ -22,12 +22,16 @@ import viVN from "antd/es/locale/vi_VN";
 import dayjs from "dayjs";
 import "dayjs/locale/vi";
 import { useAuth } from "@/context/AuthContext";
-import { useCategories } from "@/lib/hook/useCategory";
-import { useExpenseCreate } from "@/lib/hook/useExpense";
-import { useSplitCreate } from "@/lib/hook/useSplit";
-import type { IExpense, ISplit, IMember } from "@/lib/api";
-import API from "@/lib/api";
-import { useUserTeams, useTeamMembers } from "@/lib/hook";
+import { useGetCategories } from "@/hooks/api/useCategories/useCategories";
+import {
+  useCreateExpense,
+  useGetExpensesByTeam,
+} from "@/hooks/api/useExpense/useExpense";
+import { useCreateSplit } from "@/hooks/api/useSplits/useSplits";
+import { useGetMembersByTeam } from "@/hooks/api/useMembers/useMembers";
+import { useGetTeamsQuery } from "@/hooks/api/useTeam/useTeams";
+import { apiClient } from "@/lib/apiClient";
+import type { CreateExpensePayload, Expense, Split, Member } from "@/types";
 
 dayjs.locale("vi");
 
@@ -68,7 +72,7 @@ export default function SplitBillForm({
   const [splitType, setSplitType] = useState<SplitType>("equally");
   const [showAll, setShowAll] = useState(false);
   const [customAmounts, setCustomAmounts] = useState<Record<string, number>>(
-    {}
+    {},
   );
   const [result, setResult] = useState<
     { from: string; to: string; amount: number }[]
@@ -76,14 +80,14 @@ export default function SplitBillForm({
 
   const { user } = useAuth();
 
-  const { data: userTeams = [] } = useUserTeams();
-  const { data: defaultMembers = [] } = useTeamMembers(teamId);
+  const { data: userTeams = [] } = useGetTeamsQuery();
+  const { data: defaultMembers = [] } = useGetMembersByTeam(teamId);
   const queryClient = useQueryClient();
 
-  const { data: categories = [] } = useCategories(user?.id);
+  const { data: categories = [] } = useGetCategories(user?.id || "");
 
-  const expenseCreate = useExpenseCreate();
-  const splitCreate = useSplitCreate();
+  const expenseCreate = useCreateExpense();
+  const splitCreate = useCreateSplit();
 
   // ----- Thêm 1 thành viên -----
   const addParticipant = (name?: string) => {
@@ -96,7 +100,7 @@ export default function SplitBillForm({
   };
   useEffect(() => {
     if (defaultMembers.length > 0 && participants.length === 0) {
-      setParticipants(defaultMembers.map((m: IMember) => m.name));
+      setParticipants(defaultMembers.map((m: Member) => m.name));
     }
   }, [defaultMembers, participants.length]);
 
@@ -107,17 +111,15 @@ export default function SplitBillForm({
     for (const id of teamIds) {
       const members = (await queryClient.fetchQuery({
         queryKey: ["teamMembers", id],
-        queryFn: async () => {
-          const res = await API.get<IMember[]>(`/members/team/${id}`);
-          return res.data;
-        },
-      })) as IMember[];
+        queryFn: async () =>
+          apiClient<Member[]>(`/members/team/${id}`),
+      })) as Member[];
 
       collectedNames.push(...members.map((m) => m.name));
     }
 
     const unique = collectedNames.filter(
-      (name) => !participants.includes(name)
+      (name) => !participants.includes(name),
     );
 
     if (!unique.length) {
@@ -212,7 +214,7 @@ export default function SplitBillForm({
       if (!values.categoryId) return message.error("Chọn danh mục");
       if (!result.length) return message.error("Hãy bấm tính toán trước");
 
-      const payload: IExpense = {
+      const payload: CreateExpensePayload = {
         teamId,
         createdBy: user.id,
         title: values.note || "Chi tiêu mới",
@@ -222,13 +224,14 @@ export default function SplitBillForm({
         status: "completed",
         splitMethod: splitType === "equally" ? "equal" : "custom",
         date: values.date.toISOString(),
-      };
+      } as CreateExpensePayload;
 
-      const expenseRes = await expenseCreate.mutateAsync(payload);
-      const expense = expenseRes.expense;
-      const expenseId: string = String(expense._id ?? expense.id ?? "");
+      const expense = (await expenseCreate.mutateAsync(
+        payload,
+      )) as Expense;
+      const expenseId: string = String(expense._id);
 
-      const splitPayload: ISplit = {
+      const splitPayload: Partial<Split> = {
         expenseId,
         teamId,
         total: expense.amount,
@@ -338,7 +341,7 @@ export default function SplitBillForm({
             style={{ width: "100%" }}
           >
             {userTeams.map((t) => (
-              <Select.Option key={t._id ?? t.id} value={t._id ?? t.id}>
+              <Select.Option key={t._id} value={t._id}>
                 {t.name}
               </Select.Option>
             ))}

@@ -2,24 +2,14 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import {
-  Home,
-  Wallet,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  Plus,
-  Users,
-  Tags,
-  BarChart3,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Home, Wallet, Plus, Users, Tags, BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { ROUTER_PATH } from "@/app/routerPath";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { Button } from "antd";
+import { Button, Form } from "antd";
+import ExpenseQuickModal from "@/components/modal/expensemodal";
+import { useGetTeamsQuery } from "@/hooks/api";
 
 export default function Sidebar({
   collapsed,
@@ -29,7 +19,9 @@ export default function Sidebar({
   setCollapsed: (val: boolean) => void;
 }) {
   const pathname = usePathname();
-  const [openGhiChep, setOpenGhiChep] = useState(false);
+  const [openQuick, setOpenQuick] = useState(false);
+  const [quickForm] = Form.useForm();
+  const { data: teams = [] } = useGetTeamsQuery();
 
   return (
      <aside
@@ -65,21 +57,24 @@ export default function Sidebar({
         </Button>
       </div>
 
-      {/* ===== Nút chính (Thêm ghi chép) ===== */}
+      {/* Nút chính (Thêm ghi chép) */}
       <div className="mt-4 flex justify-center">
         <button
           className={clsx(
             "flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md transition-all",
             collapsed ? "w-10 h-10" : "w-[200px] h-10 gap-2 px-3"
           )}
+          onClick={() => {
+            quickForm.resetFields();
+            setOpenQuick(true);
+          }}
         >
           <Plus className="w-4 h-4" />
           {!collapsed && <span>Thêm ghi chép</span>}
-          {!collapsed && <ChevronDown className="w-4 h-4" />}
         </button>
       </div>
 
-      {/* ===== Menu chính ===== */}
+      {/* Menu chính */}
       <nav
         className={clsx(
           "flex-1 mt-4 overflow-y-auto text-sm text-gray-700 transition-all",
@@ -167,7 +162,7 @@ export default function Sidebar({
         />
       </nav>
 
-      {/* ===== Footer: Nút thu gọn ===== */}
+      {/* Footer: Nút thu gọn */}
       <div
         className="border-t py-3 text-gray-600 hover:text-gray-900 flex items-center justify-center cursor-pointer transition-all"
         onClick={() => setCollapsed(!collapsed)}
@@ -181,6 +176,15 @@ export default function Sidebar({
           </div>
         )}
       </div>
+      <ExpenseQuickModal
+        open={openQuick}
+        form={quickForm}
+        teams={teams.map((t) => ({
+          id: t._id,
+          name: t.name,
+        }))}
+        onClose={() => setOpenQuick(false)}
+      />
     </aside>
   );
 }

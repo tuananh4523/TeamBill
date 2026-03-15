@@ -460,7 +460,7 @@ export default function WalletPage() {
 
                   <Table
                     bordered
-                    rowKey="id"
+                    rowKey="_id"
                     loading={loadingTransactions}
                     columns={columns}
                     dataSource={filteredTx}

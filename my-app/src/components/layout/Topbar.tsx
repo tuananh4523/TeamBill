@@ -10,10 +10,6 @@ import { useSettings } from "@/context/Settings";
 import AuthModal from "@/components/modal/AuthModal";
 import Breadcrumb from "@/components/layout/Breadcrumb";
 
-/* ----------------------------------------------
-   FIX HYDRATION MISMATCH
-   Bọc component bằng dynamic ssr:false
----------------------------------------------- */
 const NoSSR = dynamic(
   () =>
     Promise.resolve(
@@ -30,9 +26,6 @@ export default function Topbar() {
   );
 }
 
-/* ----------------------------------------------
-   TOPBAR CLIENT-ONLY
----------------------------------------------- */
 function TopbarContent() {
   const { user, login, logout } = useAuth();
   const { settings, updateSettings } = useSettings();
