@@ -1,5 +1,13 @@
 import { apiClient } from "@/lib/apiClient";
 import { User } from "@/types";
+import { useQuery } from "@tanstack/react-query";
+
+export function useUsersQuery() {
+  return useQuery({
+    queryKey: ["users"],
+    queryFn: () => apiClient<User[]>("/users"),
+  });
+}
 
 export function useGetUsers() {
   return { getUsers: () => apiClient<User[]>("/users") };
@@ -18,7 +26,6 @@ export function useUpdateUser() {
 
 export function useDeleteUser() {
   return {
-    deleteUser: (id: string) =>
-      apiClient(`/users/${id}`, { method: "DELETE" }),
+    deleteUser: (id: string) => apiClient(`/users/${id}`, { method: "DELETE" }),
   };
 }

@@ -16,7 +16,7 @@ export default function AppBreadcrumb() {
   const [groupName, setGroupName] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState<string | null>(null);
 
-  // 🔹 Mapping tiêu đề từng phần đường dẫn
+  // Mapping tiêu đề từng phần đường dẫn
   const mapTitle = (segment: string, idx: number) => {
     switch (segment) {
       case "dashboard":
@@ -61,7 +61,7 @@ export default function AppBreadcrumb() {
     }
   };
 
-  // 🔹 Gọi API lấy tên nhóm / danh mục động
+  // Gọi API lấy tên nhóm / danh mục động
   useEffect(() => {
     const fetchGroupName = async () => {
       if (segments[0] === "split" && segments[1]) {
@@ -97,7 +97,7 @@ export default function AppBreadcrumb() {
     fetchCategoryName();
   }, [segments]);
 
-  // 🔹 Dữ liệu breadcrumb
+  // Dữ liệu breadcrumb
   const breadcrumbItems = [
     {
       title: (
