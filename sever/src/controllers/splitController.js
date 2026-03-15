@@ -47,7 +47,7 @@ export const getSplitsByTeam = async (req, res) => {
     const { teamId } = req.params;
     if (!teamId) return res.status(400).json({ message: "Thiếu mã nhóm (teamId)" });
 
-    const splits = await Split.find({ teamId }).sort({ date: -1 });
+    const splits = await Split.find({ teamId }).populate("categoryId")   // ← thêm dòng này.sort({ date: -1 });
     res.status(200).json(splits);
   } catch (err) {
     res.status(500).json({
@@ -63,7 +63,7 @@ export const getSplitsByTeam = async (req, res) => {
 export const getSplitByExpense = async (req, res) => {
   try {
     const { expenseId } = req.params;
-    const split = await Split.findOne({ expenseId });
+    const split = await Split.findOne({ expenseId }).populate("categoryId");
     if (!split)
       return res.status(404).json({ message: "Không tìm thấy split của expense này" });
     res.status(200).json(split);
@@ -81,7 +81,7 @@ export const getSplitByExpense = async (req, res) => {
 export const getSplitById = async (req, res) => {
   try {
     const { id } = req.params;
-    const split = await Split.findById(id);
+    const split = await Split.findById(id).populate("categoryId");
     if (!split) return res.status(404).json({ message: "Không tìm thấy split" });
     res.status(200).json(split);
   } catch (err) {
